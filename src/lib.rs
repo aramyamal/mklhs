@@ -1,14 +1,17 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! mklhs: a research implementation of the multi-key linearly homomorphic
+//! signature (MKLHS) scheme of Aranha–Pagnin (ePrint 2019/830).
+//! Reference: <https://eprint.iacr.org/2019/830>
+//! Research artefact. Not audited. Do not use in production.
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+#![forbid(unsafe_code)]
+#![warn(clippy::all)]
+// #![warn(missing_docs)]
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+mod crypto;
+
+pub mod api;
+pub mod errors;
+pub mod params;
+pub mod types;
+
+pub(crate) mod protocol;
