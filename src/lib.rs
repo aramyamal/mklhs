@@ -7,10 +7,8 @@
 #![warn(clippy::all)]
 // #![warn(missing_docs)]
 
-mod crypto;
 
 pub mod api;
-pub mod errors;
 pub mod params;
 pub mod types;
 
