@@ -1,0 +1,84 @@
+use ark_bls12_381::{Bls12_381, Fr, G1Projective, G2Projective, g1::Config as G1Config};
+use ark_ec::AffineRepr;
+use ark_ec::hashing::HashToCurveError;
+use ark_ec::hashing::curve_maps::wb::WBMap;
+use ark_ec::{PrimeGroup, pairing::Pairing};
+
+use ark_ec::hashing::{HashToCurve, map_to_curve_hasher::MapToCurveBasedHasher};
+use ark_ff::field_hashers::DefaultFieldHasher;
+use sha2::Sha256;
+
+pub type Scalar = Fr;
+pub type G1 = G1Projective;
+pub type G2 = G2Projective;
+pub type GT = <Bls12_381 as Pairing>::TargetField;
+
+pub fn g1_gen() -> G1 {
+    G1::generator()
+}
+
+pub fn g2_gen() -> G2 {
+    G2::generator()
+}
+
+pub type H2G1 =
+    MapToCurveBasedHasher<G1Projective, DefaultFieldHasher<Sha256, 128>, WBMap<G1Config>>;
+
+pub fn make_h2g1(dst: &'static [u8]) -> Result<H2G1, HashToCurveError> {
+    H2G1::new(dst)
+}
+
+pub fn hash_to_g1_with(hasher: &H2G1, msg: &[u8]) -> Result<G1, HashToCurveError> {
+    let p = hasher.hash(msg)?;
+    Ok(p.into_group())
+}
+
+// pub fn hash_to_g1(domain: &[u8], msg: &[u8]) -> Result<G1, HashToCurveError> {
+//     let h2c_hasher_bls12_381 = MapToCurveBasedHasher::<
+//         G1Projective,
+//         DefaultFieldHasher<Sha256, 128>,
+//         WBMap<G1Config>,
+//     >::new(domain)?;
+//
+//     let result = h2c_hasher_bls12_381.hash(msg)?;
+//     Ok(result.into_group())
+// }
+
+fn hash_to_g1(dst: &'static [u8], msg: &[u8]) -> Result<G1, HashToCurveError> {
+    let h = make_h2g1(dst)?;
+    hash_to_g1_with(&h, msg)
+}
+
+mod tests {
+    use super::*;
+    use ark_ec::CurveGroup;
+    use ark_ff::Zero;
+
+    #[test]
+    fn hash_to_g1_smoke() {
+        let dst = b"hejsan";
+        let msg = b"hello";
+
+        let p = hash_to_g1(dst, msg).expect("hash_to_g1 failed");
+        assert!(!p.is_zero());
+
+        let a = p.into_affine();
+        assert!(a.is_on_curve());
+        assert!(a.is_in_correct_subgroup_assuming_on_curve());
+    }
+
+    #[test]
+    fn hash_to_g1_properties() {
+        let dst = b"hejsan";
+        let msg = b"hello";
+
+        // deterministic for same inputs
+        let p1 = hash_to_g1(dst, msg).unwrap();
+        let p2 = hash_to_g1(dst, msg).unwrap();
+        assert_eq!(p1, p2);
+
+        // domain separation changes output
+        let p3 = hash_to_g1(b"hejsansvejsan", msg).unwrap();
+        assert_ne!(p1, p3);
+    }
+}

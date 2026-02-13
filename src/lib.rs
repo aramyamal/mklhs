@@ -7,6 +7,7 @@
 #![warn(clippy::all)]
 // #![warn(missing_docs)]
 
+mod algebra;
 
 pub mod api;
 pub mod params;
