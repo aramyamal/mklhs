@@ -1,12 +1,13 @@
 use ark_bls12_381::{Bls12_381, Fr, G1Projective, G2Projective, g1::Config as G1Config};
 use ark_ec::AffineRepr;
-use ark_ec::hashing::HashToCurveError;
 use ark_ec::hashing::curve_maps::wb::WBMap;
 use ark_ec::{PrimeGroup, pairing::Pairing};
 
 use ark_ec::hashing::{HashToCurve, map_to_curve_hasher::MapToCurveBasedHasher};
 use ark_ff::field_hashers::DefaultFieldHasher;
 use sha2::Sha256;
+
+use crate::errors::AlgebraError;
 
 pub type Scalar = Fr;
 pub type G1 = G1Projective;
@@ -24,27 +25,25 @@ pub fn g2_gen() -> G2 {
 pub type H2G1 =
     MapToCurveBasedHasher<G1Projective, DefaultFieldHasher<Sha256, 128>, WBMap<G1Config>>;
 
-pub fn make_h2g1(dst: &'static [u8]) -> Result<H2G1, HashToCurveError> {
-    H2G1::new(dst)
+pub fn make_h2g1(dst: &'static [u8]) -> Result<H2G1, AlgebraError> {
+    H2G1::new(dst).map_err(|e| AlgebraError::HashToCurve(Box::new(e)))
 }
 
-pub fn hash_to_g1_with(hasher: &H2G1, msg: &[u8]) -> Result<G1, HashToCurveError> {
-    let p = hasher.hash(msg)?;
+pub fn hash_to_g1_with(hasher: &H2G1, msg: &[u8]) -> Result<G1, AlgebraError> {
+    let p = hasher
+        .hash(msg)
+        .map_err(|e| AlgebraError::HashToCurve(Box::new(e)))?;
     Ok(p.into_group())
 }
 
-// pub fn hash_to_g1(domain: &[u8], msg: &[u8]) -> Result<G1, HashToCurveError> {
-//     let h2c_hasher_bls12_381 = MapToCurveBasedHasher::<
-//         G1Projective,
-//         DefaultFieldHasher<Sha256, 128>,
-//         WBMap<G1Config>,
-//     >::new(domain)?;
-//
-//     let result = h2c_hasher_bls12_381.hash(msg)?;
-//     Ok(result.into_group())
+// NOTE: This might be a better approach then using map_err
+// impl From<HashToCurveError> for AlgebraError {
+//     fn from(e: HashToCurveError) -> Self {
+//         AlgebraError::HashToCurve(Box::new(e))
+//     }
 // }
 
-fn hash_to_g1(dst: &'static [u8], msg: &[u8]) -> Result<G1, HashToCurveError> {
+fn hash_to_g1(dst: &'static [u8], msg: &[u8]) -> Result<G1, AlgebraError> {
     let h = make_h2g1(dst)?;
     hash_to_g1_with(&h, msg)
 }

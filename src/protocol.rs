@@ -1,22 +1,20 @@
 use crate::{
-    algebra::{G1, Scalar, g1_gen, g2_gen, hash_to_g1_with},
+    algebra::{Scalar, g1_gen, g2_gen, hash_to_g1_with},
+    errors::ProtocolError,
     params::Params,
     types::{Id, Label, PublicKey, SecretKey, SignShare},
 };
 
-use ark_ec::hashing::HashToCurveError;
-use ark_std::{
-    UniformRand, Zero,
-    rand::{Error, RngCore},
-};
+use ark_std::{UniformRand, Zero, rand::RngCore};
 
 // TODO: add CryptoRng as trait for R
 pub fn keygen<const K: usize, R: RngCore>(
     _pp: &Params<K>,
     rng: &mut R,
-) -> Result<(SecretKey<K>, PublicKey<K>), Error> {
+) -> Result<(SecretKey<K>, PublicKey<K>), ProtocolError> {
     let mut id_bytes = [0u8; K];
-    rng.try_fill_bytes(&mut id_bytes)?;
+    rng.try_fill_bytes(&mut id_bytes)
+        .map_err(|e| ProtocolError::Rng(e.to_string()))?;
     let id = Id(id_bytes);
 
     let mut x = Scalar::rand(rng);
@@ -37,7 +35,7 @@ pub fn sign<const K: usize>(
     sk: &SecretKey<K>,
     label: Label<K>,
     msg: Scalar,
-) -> Result<SignShare<K>, HashToCurveError> {
+) -> Result<SignShare<K>, ProtocolError> {
     let label_bytes = label.to_bytes();
     let h = hash_to_g1_with(pp.h2g1_label(), &label_bytes)?;
 
