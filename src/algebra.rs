@@ -43,15 +43,16 @@ pub fn hash_to_g1_with(hasher: &H2G1, msg: &[u8]) -> Result<G1, AlgebraError> {
 //     }
 // }
 
-fn hash_to_g1(dst: &'static [u8], msg: &[u8]) -> Result<G1, AlgebraError> {
-    let h = make_h2g1(dst)?;
-    hash_to_g1_with(&h, msg)
-}
-
+#[cfg(test)]
 mod tests {
     use super::*;
     use ark_ec::CurveGroup;
     use ark_ff::Zero;
+
+    fn hash_to_g1(dst: &'static [u8], msg: &[u8]) -> Result<G1, AlgebraError> {
+        let h = make_h2g1(dst)?;
+        hash_to_g1_with(&h, msg)
+    }
 
     #[test]
     fn hash_to_g1_smoke() {
