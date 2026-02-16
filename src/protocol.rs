@@ -79,6 +79,9 @@ pub fn eval<const K: usize>(
         ));
     }
 
+    // TODO: research MSM (multi-scalar multiplication) to be used here instead
+    // for performance gain (`ark_ec::msm` or `ark_ec::VariableBaseMSM`).
+    // in particular do criterion benchmark test to see difference also
     let gamma: G1 = coeffs
         .iter()
         .zip(sign_shares.iter())
@@ -133,6 +136,7 @@ pub fn verify<const K: usize>(
         }
 
         let h_i = hash_to_g1_with(pp.h2g1_label(), &lab.to_bytes())?;
+        // TODO: switch to MSM here also, but seems more tricky. also bench diff
         a[j] += h_i * f_i;
     }
 
@@ -145,6 +149,17 @@ pub fn verify<const K: usize>(
             Ok(acc * pairing(&a[j], pk.value()))
         },
     )?;
+
+    // TODO: maybe switch to using `product_of_pairing` from arkworks for
+    // performance gain. in particular do criterion benchmark test to see diff
+    // ```
+    // let g1_points: Vec<_> = a.iter().collect();
+    // let g2_points: Vec<_> = ord_ids
+    //     .iter()
+    //     .map(|id| pks.get(id).unwrap().value())
+    //     .collect();
+    // let c = product_of_pairing(&g1_points, &g2_points);
+    // ```
 
     let lhs: GT = pairing(sign_aggr.gamma(), &g2_gen());
 
