@@ -124,6 +124,16 @@ impl<const K: usize> SignAggr<K> {
     pub fn into_parts(self) -> (G1, Vec<Scalar>) {
         (self.gamma, self.mus)
     }
+
+    #[cfg(test)]
+    pub(crate) fn gamma_mut(&mut self) -> &mut G1 {
+        &mut self.gamma
+    }
+
+    #[cfg(test)]
+    pub(crate) fn mus_mut(&mut self) -> &mut Vec<Scalar> {
+        &mut self.mus
+    }
 }
 
 #[derive(Clone, Debug)]

@@ -497,5 +497,144 @@ mod tests {
 
             assert!(result);
         }
+
+        #[test]
+        fn fails_on_wrong_message() {
+            const K: usize = 8;
+
+            let pp = Params::<K>::new();
+            let mut rng = test_rng();
+
+            let (sk, pk) = keygen(&pp, &mut rng).unwrap();
+
+            let msg = Scalar::rand(&mut rng);
+            let wrong_msg = Scalar::rand(&mut rng);
+
+            let label = Label::new(sk.id(), rand_tag::<K, _>(&mut rng));
+            let share = sign(&pp, &sk, label, msg).unwrap();
+
+            let program = LabeledProgram::new(vec![Scalar::from(1)], vec![label]).unwrap();
+
+            let aggr = eval(&pp, &program, vec![share]).unwrap();
+
+            let mut pks = HashMap::new();
+            pks.insert(pk.id(), pk);
+
+            let ok = verify(&pp, &program, &pks, wrong_msg, &aggr).unwrap();
+            assert!(!ok);
+        }
+
+        #[test]
+        fn missing_public_key_errors() {
+            const K: usize = 8;
+
+            let pp = Params::<K>::new();
+            let mut rng = test_rng();
+
+            let (sk, _pk) = keygen(&pp, &mut rng).unwrap();
+
+            let msg = Scalar::rand(&mut rng);
+            let label = Label::new(sk.id(), rand_tag::<K, _>(&mut rng));
+
+            let share = sign(&pp, &sk, label, msg).unwrap();
+
+            let program = LabeledProgram::new(vec![Scalar::from(1)], vec![label]).unwrap();
+
+            let aggr = eval(&pp, &program, vec![share]).unwrap();
+
+            let pks = HashMap::new(); // empty!
+
+            assert!(verify(&pp, &program, &pks, msg, &aggr).is_err());
+        }
+
+        #[test]
+        fn fails_if_gamma_tampered() {
+            const K: usize = 8;
+
+            let pp = Params::<K>::new();
+            let mut rng = test_rng();
+
+            let (sk, pk) = keygen(&pp, &mut rng).unwrap();
+
+            let msg = Scalar::rand(&mut rng);
+            let label = Label::new(sk.id(), rand_tag::<K, _>(&mut rng));
+
+            let share = sign(&pp, &sk, label, msg).unwrap();
+
+            let program = LabeledProgram::new(vec![Scalar::from(1)], vec![label]).unwrap();
+
+            let mut aggr = eval(&pp, &program, vec![share]).unwrap();
+
+            // tamper gamma
+            *aggr.gamma_mut() += g1_gen();
+
+            let mut pks = HashMap::new();
+            pks.insert(pk.id(), pk);
+
+            let ok = verify(&pp, &program, &pks, msg, &aggr).unwrap();
+            assert!(!ok);
+        }
+
+        #[test]
+        fn fails_if_mu_tampered() {
+            const K: usize = 8;
+
+            let pp = Params::<K>::new();
+            let mut rng = test_rng();
+
+            let (sk, pk) = keygen(&pp, &mut rng).unwrap();
+
+            let msg = Scalar::rand(&mut rng);
+            let label = Label::new(sk.id(), rand_tag::<K, _>(&mut rng));
+
+            let share = sign(&pp, &sk, label, msg).unwrap();
+
+            let program = LabeledProgram::new(vec![Scalar::from(1)], vec![label]).unwrap();
+
+            let mut aggr = eval(&pp, &program, vec![share]).unwrap();
+
+            // tamper mu
+            aggr.mus_mut()[0] += Scalar::from(1);
+
+            let mut pks = HashMap::new();
+            pks.insert(pk.id(), pk);
+
+            let ok = verify(&pp, &program, &pks, msg, &aggr).unwrap();
+            assert!(!ok);
+        }
+
+        #[test]
+        fn two_users() {
+            const K: usize = 8;
+
+            let pp = Params::<K>::new();
+            let mut rng = test_rng();
+
+            let (sk_a, pk_a) = keygen(&pp, &mut rng).unwrap();
+            let (sk_b, pk_b) = keygen(&pp, &mut rng).unwrap();
+
+            let msg_a = Scalar::rand(&mut rng);
+            let msg_b = Scalar::rand(&mut rng);
+
+            let lab_a = Label::new(sk_a.id(), rand_tag::<K, _>(&mut rng));
+            let lab_b = Label::new(sk_b.id(), rand_tag::<K, _>(&mut rng));
+
+            let sh_a = sign(&pp, &sk_a, lab_a, msg_a).unwrap();
+            let sh_b = sign(&pp, &sk_b, lab_b, msg_b).unwrap();
+
+            let coeffs = vec![Scalar::from(1), Scalar::from(1)];
+            let program = LabeledProgram::new(coeffs, vec![lab_a, lab_b]).unwrap();
+
+            let aggr = eval(&pp, &program, vec![sh_a, sh_b]).unwrap();
+
+            let mut pks = HashMap::new();
+            pks.insert(pk_a.id(), pk_a);
+            pks.insert(pk_b.id(), pk_b);
+
+            let expected_msg = msg_a + msg_b;
+
+            let ok = verify(&pp, &program, &pks, expected_msg, &aggr).unwrap();
+            assert!(ok);
+        }
     }
 }
