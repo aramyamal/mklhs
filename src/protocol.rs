@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    algebra::{G1, GT, Scalar, g1_gen, g2_gen, hash_to_g1_with, pairing},
+    algebra::{G1, GT, Scalar, g1_gen, g1_zero, g2_gen, gt_one, hash_to_g1_with, pairing},
     errors::ProtocolError,
     params::Params,
     types::{Id, Label, LabeledProgram, PublicKey, SecretKey, SignAggr, SignShare},
@@ -81,16 +81,8 @@ pub fn eval<const K: usize>(
 
     let gamma: G1 = coeffs
         .iter()
-        .enumerate()
-        .map(|(i, f_i)| (*sign_shares[i].gamma()) * f_i)
-        .sum();
-
-    // NOTE: This is probably supported by more backends and but maybe not
-    // faster, will have to benchmark:
-    // let gamma = coeffs
-    // .iter()
-    // .zip(sign_shares.iter())
-    // .fold(G1::zero(), |acc, (f, sh)| acc + sh.gamma * *f);
+        .zip(sign_shares.iter())
+        .fold(g1_zero(), |acc, (f, share)| acc + *share.gamma() * f);
 
     let (ord_ids, groups) = organize(labels);
 
@@ -144,30 +136,15 @@ pub fn verify<const K: usize>(
         a[j] += h_i * f_i;
     }
 
-    // compute each term to be multiplied
-    let terms = ord_ids
-        .iter()
-        .enumerate()
-        .map(|(j, id_j)| {
+    let c: GT = ord_ids.iter().enumerate().try_fold(
+        gt_one(),
+        |acc, (j, id_j)| -> Result<GT, ProtocolError> {
             let pk = pks.get(id_j).ok_or_else(|| {
                 ProtocolError::InvalidInput("missing public key for ord_id".to_string())
             })?;
-            Ok(pairing(&a[j], pk.value()))
-        })
-        .collect::<Result<Vec<GT>, ProtocolError>>()?;
-
-    let c: GT = terms.into_iter().product();
-
-    // NOTE: This might be more backend agnostic and avoids intermediary Vec
-    // let c: GT = ord_ids.iter().enumerate().try_fold(
-    //     gt_one(),
-    //     |acc, (j, id_j)| -> Result<GT, ProtocolError> {
-    //         let pk = pks.get(id_j).ok_or_else(|| {
-    //             ProtocolError::InvalidInput("missing public key for ord_id".to_string())
-    //         })?;
-    //         Ok(acc * pairing(&a[j], pk.value()))
-    //     },
-    // )?;
+            Ok(acc * pairing(&a[j], pk.value()))
+        },
+    )?;
 
     let lhs: GT = pairing(sign_aggr.gamma(), &g2_gen());
 
