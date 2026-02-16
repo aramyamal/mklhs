@@ -109,7 +109,7 @@ pub fn verify<const K: usize>(
     msg: Scalar,
     sign_aggr: &SignAggr<K>,
 ) -> Result<bool, ProtocolError> {
-    // ver1
+    // ver1: check $\sum_j \mu_j = m$
     let mu_sum: Scalar = sign_aggr.mus().iter().sum();
     if mu_sum != msg {
         return Ok(false);
@@ -171,7 +171,7 @@ pub fn verify<const K: usize>(
 
     let lhs: GT = pairing(sign_aggr.gamma(), &g2_gen());
 
-    // ver2
+    // ver2: $e(\gamma, g_2) = \prod_j e(A_j, \mathrm{pk}_j)$
     Ok(lhs == c)
 }
 
