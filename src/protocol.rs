@@ -189,297 +189,313 @@ mod tests {
         Tag(b)
     }
 
-    #[test]
-    fn keygen_smoke() {
-        let pp = Params::<32>::new();
-        let mut rng = ark_std::test_rng();
-        let (_sk, pk) = keygen(&pp, &mut rng).expect("keygen failed");
-        assert_eq!(pk.id().0.len(), 32);
-    }
+    mod keygen_tests {
 
-    #[test]
-    fn organize_smoke() {
-        const K: usize = 8;
-        let mut rng = test_rng();
+        use super::*;
 
-        // build labels with repeated ids in a known pattern:
-        // ids: A,B,A,C,B,A  => ord_ids should be [A,B,C]
-        let id_a = Id::<K>([1u8; K]);
-        let id_b = Id::<K>([2u8; K]);
-        let id_c = Id::<K>([3u8; K]);
-
-        let labels = vec![
-            Label::new(id_a, rand_tag::<K, _>(&mut rng)),
-            Label::new(id_b, rand_tag::<K, _>(&mut rng)),
-            Label::new(id_a, rand_tag::<K, _>(&mut rng)),
-            Label::new(id_c, rand_tag::<K, _>(&mut rng)),
-            Label::new(id_b, rand_tag::<K, _>(&mut rng)),
-            Label::new(id_a, rand_tag::<K, _>(&mut rng)),
-        ];
-
-        let (ord_ids, groups) = organize(&labels);
-
-        assert_eq!(ord_ids, vec![id_a, id_b, id_c]);
-        assert_eq!(groups.len(), ord_ids.len());
-
-        // 1. groups cover all indices exactly once
-        let mut seen = vec![false; labels.len()];
-        for idxs in &groups {
-            for &i in idxs {
-                assert!(i < labels.len());
-                assert!(!seen[i], "index {i} appears in multiple groups");
-                seen[i] = true;
-            }
-        }
-        assert!(
-            seen.iter().all(|b| *b == true),
-            "some indices are not covered"
-        );
-
-        // 2. each group corresponds to its id
-        for (j, id) in ord_ids.iter().enumerate() {
-            for &i in &groups[j] {
-                assert_eq!(labels[i].id(), *id);
-            }
+        #[test]
+        fn keygen_smoke() {
+            let pp = Params::<32>::new();
+            let mut rng = ark_std::test_rng();
+            let (_sk, pk) = keygen(&pp, &mut rng).expect("keygen failed");
+            assert_eq!(pk.id().0.len(), 32);
         }
     }
 
-    #[test]
-    fn eval_smoke() {
-        const K: usize = 8;
+    mod organize_tests {
 
-        let pp = Params::<K>::new();
-        let mut rng = test_rng();
+        use super::*;
 
-        // one user, one message, coeff=1 => eval should reproduce the same mu
-        let (sk, _pk) = keygen(&pp, &mut rng).expect("keygen failed");
+        #[test]
+        fn smoke() {
+            const K: usize = 8;
+            let mut rng = test_rng();
 
-        let tag = rand_tag::<K, _>(&mut rng);
-        let label = Label::new(sk.id(), tag);
-        let msg = Scalar::rand(&mut rng);
+            // build labels with repeated ids in a known pattern:
+            // ids: A,B,A,C,B,A  => ord_ids should be [A,B,C]
+            let id_a = Id::<K>([1u8; K]);
+            let id_b = Id::<K>([2u8; K]);
+            let id_c = Id::<K>([3u8; K]);
 
-        let share = sign(&pp, &sk, label, msg).expect("sign failed");
+            let labels = vec![
+                Label::new(id_a, rand_tag::<K, _>(&mut rng)),
+                Label::new(id_b, rand_tag::<K, _>(&mut rng)),
+                Label::new(id_a, rand_tag::<K, _>(&mut rng)),
+                Label::new(id_c, rand_tag::<K, _>(&mut rng)),
+                Label::new(id_b, rand_tag::<K, _>(&mut rng)),
+                Label::new(id_a, rand_tag::<K, _>(&mut rng)),
+            ];
 
-        // labeled program with n=1, f1=1
-        let program = LabeledProgram::new(vec![Scalar::from(1)], vec![label])
-            .expect("labeled program build failed");
+            let (ord_ids, groups) = organize(&labels);
 
-        let aggr = eval(&pp, &program, vec![share.clone()]).expect("eval failed");
+            assert_eq!(ord_ids, vec![id_a, id_b, id_c]);
+            assert_eq!(groups.len(), ord_ids.len());
 
-        // gamma should match share.gamma (since coeff=1)
-        assert_eq!(aggr.gamma(), share.gamma());
-        // ord_ids should contain just that signer
-        assert_eq!(aggr.ord_ids(), &[sk.id()]);
-        // mu list should contain just msg
-        assert_eq!(aggr.mus(), &[msg]);
+            // 1. groups cover all indices exactly once
+            let mut seen = vec![false; labels.len()];
+            for idxs in &groups {
+                for &i in idxs {
+                    assert!(i < labels.len());
+                    assert!(!seen[i], "index {i} appears in multiple groups");
+                    seen[i] = true;
+                }
+            }
+            assert!(
+                seen.iter().all(|b| *b == true),
+                "some indices are not covered"
+            );
+
+            // 2. each group corresponds to its id
+            for (j, id) in ord_ids.iter().enumerate() {
+                for &i in &groups[j] {
+                    assert_eq!(labels[i].id(), *id);
+                }
+            }
+        }
     }
 
-    #[test]
-    fn eval_single_user_weighted_sum() {
-        // one user, 3 messages, coeffs = [2, 3, 5]
-        // expected: gamma = γ1*2 + γ2*3 + γ3*5, mu = 2*m1 + 3*m2 + 5*m3
-        const K: usize = 8;
-        let pp = Params::<K>::new();
-        let mut rng = test_rng();
+    mod eval_tests {
 
-        let (sk, _pk) = keygen(&pp, &mut rng).unwrap();
+        use super::*;
 
-        let msgs: Vec<Scalar> = (0..3).map(|_| Scalar::rand(&mut rng)).collect();
-        let tags: Vec<Tag<K>> = (0..3).map(|_| rand_tag::<K, _>(&mut rng)).collect();
-        let labels: Vec<Label<K>> = tags.iter().map(|t| Label::new(sk.id(), *t)).collect();
+        #[test]
+        fn smoke() {
+            const K: usize = 8;
 
-        let shares: Vec<SignShare<K>> = labels
-            .iter()
-            .zip(msgs.iter())
-            .map(|(l, m)| sign(&pp, &sk, *l, *m).unwrap())
-            .collect();
+            let pp = Params::<K>::new();
+            let mut rng = test_rng();
 
-        let coeffs = vec![Scalar::from(2), Scalar::from(3), Scalar::from(5)];
+            // one user, one message, coeff=1 => eval should reproduce the same mu
+            let (sk, _pk) = keygen(&pp, &mut rng).expect("keygen failed");
 
-        let program = LabeledProgram::new(coeffs.clone(), labels).unwrap();
-        let aggr = eval(&pp, &program, shares.clone()).unwrap();
+            let tag = rand_tag::<K, _>(&mut rng);
+            let label = Label::new(sk.id(), tag);
+            let msg = Scalar::rand(&mut rng);
 
-        // Only one signer
-        assert_eq!(aggr.ord_ids().len(), 1);
-        assert_eq!(aggr.ord_ids()[0], sk.id());
+            let share = sign(&pp, &sk, label, msg).expect("sign failed");
 
-        // mu should equal weighted sum of messages
-        let expected_mu: Scalar = coeffs.iter().zip(msgs.iter()).map(|(f, m)| *f * *m).sum();
-        assert_eq!(aggr.mus()[0], expected_mu);
+            // labeled program with n=1, f1=1
+            let program = LabeledProgram::new(vec![Scalar::from(1)], vec![label])
+                .expect("labeled program build failed");
 
-        // gamma should equal weighted sum of gammas
-        let expected_gamma: G1 = coeffs
-            .iter()
-            .zip(shares.iter())
-            .fold(G1::zero(), |acc, (f, sh)| acc + *sh.gamma() * *f);
-        assert_eq!(*aggr.gamma(), expected_gamma);
+            let aggr = eval(&pp, &program, vec![share.clone()]).expect("eval failed");
+
+            // gamma should match share.gamma (since coeff=1)
+            assert_eq!(aggr.gamma(), share.gamma());
+            // ord_ids should contain just that signer
+            assert_eq!(aggr.ord_ids(), &[sk.id()]);
+            // mu list should contain just msg
+            assert_eq!(aggr.mus(), &[msg]);
+        }
+
+        #[test]
+        fn single_user_weighted_sum() {
+            // one user, 3 messages, coeffs = [2, 3, 5]
+            // expected: gamma = γ1*2 + γ2*3 + γ3*5, mu = 2*m1 + 3*m2 + 5*m3
+            const K: usize = 8;
+            let pp = Params::<K>::new();
+            let mut rng = test_rng();
+
+            let (sk, _pk) = keygen(&pp, &mut rng).unwrap();
+
+            let msgs: Vec<Scalar> = (0..3).map(|_| Scalar::rand(&mut rng)).collect();
+            let tags: Vec<Tag<K>> = (0..3).map(|_| rand_tag::<K, _>(&mut rng)).collect();
+            let labels: Vec<Label<K>> = tags.iter().map(|t| Label::new(sk.id(), *t)).collect();
+
+            let shares: Vec<SignShare<K>> = labels
+                .iter()
+                .zip(msgs.iter())
+                .map(|(l, m)| sign(&pp, &sk, *l, *m).unwrap())
+                .collect();
+
+            let coeffs = vec![Scalar::from(2), Scalar::from(3), Scalar::from(5)];
+
+            let program = LabeledProgram::new(coeffs.clone(), labels).unwrap();
+            let aggr = eval(&pp, &program, shares.clone()).unwrap();
+
+            // Only one signer
+            assert_eq!(aggr.ord_ids().len(), 1);
+            assert_eq!(aggr.ord_ids()[0], sk.id());
+
+            // mu should equal weighted sum of messages
+            let expected_mu: Scalar = coeffs.iter().zip(msgs.iter()).map(|(f, m)| *f * *m).sum();
+            assert_eq!(aggr.mus()[0], expected_mu);
+
+            // gamma should equal weighted sum of gammas
+            let expected_gamma: G1 = coeffs
+                .iter()
+                .zip(shares.iter())
+                .fold(G1::zero(), |acc, (f, sh)| acc + *sh.gamma() * *f);
+            assert_eq!(*aggr.gamma(), expected_gamma);
+        }
+
+        #[test]
+        fn two_users_one_msg_each() {
+            // two users, one message each, coeffs = [1, 1]
+            const K: usize = 8;
+            let pp = Params::<K>::new();
+            let mut rng = test_rng();
+
+            let (sk_a, _pk_a) = keygen(&pp, &mut rng).unwrap();
+            let (sk_b, _pk_b) = keygen(&pp, &mut rng).unwrap();
+
+            let msg_a = Scalar::rand(&mut rng);
+            let msg_b = Scalar::rand(&mut rng);
+
+            let lab_a = Label::new(sk_a.id(), rand_tag::<K, _>(&mut rng));
+            let lab_b = Label::new(sk_b.id(), rand_tag::<K, _>(&mut rng));
+
+            let sh_a = sign(&pp, &sk_a, lab_a, msg_a).unwrap();
+            let sh_b = sign(&pp, &sk_b, lab_b, msg_b).unwrap();
+
+            let coeffs = vec![Scalar::from(1), Scalar::from(1)];
+            let program = LabeledProgram::new(coeffs, vec![lab_a, lab_b]).unwrap();
+            let aggr = eval(&pp, &program, vec![sh_a.clone(), sh_b.clone()]).unwrap();
+
+            // two different signers
+            assert_eq!(aggr.ord_ids().len(), 2);
+            assert_eq!(aggr.ord_ids()[0], sk_a.id());
+            assert_eq!(aggr.ord_ids()[1], sk_b.id());
+
+            // gamma should be the sum of gammas (coeff=1)
+            assert_eq!(*aggr.gamma(), *sh_a.gamma() + *sh_b.gamma());
+
+            // each mu should just be the original message (coeff=1, one msg per user)
+            assert_eq!(aggr.mus()[0], msg_a);
+            assert_eq!(aggr.mus()[1], msg_b);
+        }
+
+        #[test]
+        fn two_users_multiple_msgs() {
+            // user A signs m1, m2
+            // user B signs m3
+            // labels order: [A, B, A] => ord_ids = [A, B]
+            // coeffs = [2, 3, 4]
+            // mu_A = 2*m1 + 4*m3_A, mu_B = 3*m2_B
+            const K: usize = 8;
+            let pp = Params::<K>::new();
+            let mut rng = test_rng();
+
+            let (sk_a, _) = keygen(&pp, &mut rng).unwrap();
+            let (sk_b, _) = keygen(&pp, &mut rng).unwrap();
+
+            let m1 = Scalar::rand(&mut rng);
+            let m2 = Scalar::rand(&mut rng);
+            let m3 = Scalar::rand(&mut rng);
+
+            let lab1 = Label::new(sk_a.id(), rand_tag::<K, _>(&mut rng));
+            let lab2 = Label::new(sk_b.id(), rand_tag::<K, _>(&mut rng));
+            let lab3 = Label::new(sk_a.id(), rand_tag::<K, _>(&mut rng));
+
+            let sh1 = sign(&pp, &sk_a, lab1, m1).unwrap();
+            let sh2 = sign(&pp, &sk_b, lab2, m2).unwrap();
+            let sh3 = sign(&pp, &sk_a, lab3, m3).unwrap();
+
+            let coeffs = vec![Scalar::from(2), Scalar::from(3), Scalar::from(4)];
+            let program = LabeledProgram::new(coeffs.clone(), vec![lab1, lab2, lab3]).unwrap();
+            let aggr = eval(&pp, &program, vec![sh1.clone(), sh2.clone(), sh3.clone()]).unwrap();
+
+            // ord_ids: A first, then B
+            assert_eq!(aggr.ord_ids().len(), 2);
+            assert_eq!(aggr.ord_ids()[0], sk_a.id());
+            assert_eq!(aggr.ord_ids()[1], sk_b.id());
+
+            // mu_A = 2*m1 + 4*m3
+            let expected_mu_a = Scalar::from(2) * m1 + Scalar::from(4) * m3;
+            assert_eq!(aggr.mus()[0], expected_mu_a);
+
+            // mu_B = 3*m2
+            let expected_mu_b = Scalar::from(3) * m2;
+            assert_eq!(aggr.mus()[1], expected_mu_b);
+
+            // gamma = 2*γ1 + 3*γ2 + 4*γ3
+            let expected_gamma = *sh1.gamma() * Scalar::from(2)
+                + *sh2.gamma() * Scalar::from(3)
+                + *sh3.gamma() * Scalar::from(4);
+            assert_eq!(*aggr.gamma(), expected_gamma);
+        }
+
+        #[test]
+        fn zero_coefficients() {
+            // coeff=0 should contribute nothing
+            const K: usize = 8;
+            let pp = Params::<K>::new();
+            let mut rng = test_rng();
+
+            let (sk, _) = keygen(&pp, &mut rng).unwrap();
+
+            let m1 = Scalar::rand(&mut rng);
+            let m2 = Scalar::rand(&mut rng);
+
+            let lab1 = Label::new(sk.id(), rand_tag::<K, _>(&mut rng));
+            let lab2 = Label::new(sk.id(), rand_tag::<K, _>(&mut rng));
+
+            let sh1 = sign(&pp, &sk, lab1, m1).unwrap();
+            let sh2 = sign(&pp, &sk, lab2, m2).unwrap();
+
+            let coeffs = vec![Scalar::from(7), Scalar::zero()];
+            let program = LabeledProgram::new(coeffs, vec![lab1, lab2]).unwrap();
+            let aggr = eval(&pp, &program, vec![sh1.clone(), sh2]).unwrap();
+
+            // mu should only reflect m1
+            assert_eq!(aggr.mus()[0], Scalar::from(7) * m1);
+
+            // gamma should only reflect sh1
+            assert_eq!(*aggr.gamma(), *sh1.gamma() * Scalar::from(7));
+        }
+
+        #[test]
+        fn length_mismatch_error() {
+            const K: usize = 8;
+            let pp = Params::<K>::new();
+            let mut rng = test_rng();
+
+            let (sk, _) = keygen(&pp, &mut rng).unwrap();
+
+            let lab = Label::new(sk.id(), rand_tag::<K, _>(&mut rng));
+            let sh = sign(&pp, &sk, lab, Scalar::from(42)).unwrap();
+
+            // 2 coeffs but 1 label
+            assert!(
+                LabeledProgram::new(vec![Scalar::from(1), Scalar::from(2)], vec![lab],).is_err()
+            );
+
+            // 1 coeff, 1 label, but 2 shares
+            let program = LabeledProgram::new(vec![Scalar::from(1)], vec![lab]).unwrap();
+            assert!(eval(&pp, &program, vec![sh.clone(), sh]).is_err());
+        }
     }
+    mod verify_tests {
 
-    #[test]
-    fn eval_two_users_one_msg_each() {
-        // two users, one message each, coeffs = [1, 1]
-        const K: usize = 8;
-        let pp = Params::<K>::new();
-        let mut rng = test_rng();
+        use super::*;
 
-        let (sk_a, _pk_a) = keygen(&pp, &mut rng).unwrap();
-        let (sk_b, _pk_b) = keygen(&pp, &mut rng).unwrap();
+        #[test]
+        fn smoke() {
+            const K: usize = 8;
 
-        let msg_a = Scalar::rand(&mut rng);
-        let msg_b = Scalar::rand(&mut rng);
+            let pp = Params::<K>::new();
+            let mut rng = test_rng();
 
-        let lab_a = Label::new(sk_a.id(), rand_tag::<K, _>(&mut rng));
-        let lab_b = Label::new(sk_b.id(), rand_tag::<K, _>(&mut rng));
+            // one signer
+            let (sk, pk) = keygen(&pp, &mut rng).expect("keygen failed");
 
-        let sh_a = sign(&pp, &sk_a, lab_a, msg_a).unwrap();
-        let sh_b = sign(&pp, &sk_b, lab_b, msg_b).unwrap();
+            let msg = Scalar::rand(&mut rng);
+            let label = Label::new(sk.id(), rand_tag::<K, _>(&mut rng));
 
-        let coeffs = vec![Scalar::from(1), Scalar::from(1)];
-        let program = LabeledProgram::new(coeffs, vec![lab_a, lab_b]).unwrap();
-        let aggr = eval(&pp, &program, vec![sh_a.clone(), sh_b.clone()]).unwrap();
+            let share = sign(&pp, &sk, label, msg).expect("sign failed");
 
-        // two different signers
-        assert_eq!(aggr.ord_ids().len(), 2);
-        assert_eq!(aggr.ord_ids()[0], sk_a.id());
-        assert_eq!(aggr.ord_ids()[1], sk_b.id());
+            // trivial linear program: f = 1
+            let program = LabeledProgram::new(vec![Scalar::from(1)], vec![label])
+                .expect("program build failed");
 
-        // gamma should be the sum of gammas (coeff=1)
-        assert_eq!(*aggr.gamma(), *sh_a.gamma() + *sh_b.gamma());
+            let aggr = eval(&pp, &program, vec![share]).expect("eval failed");
 
-        // each mu should just be the original message (coeff=1, one msg per user)
-        assert_eq!(aggr.mus()[0], msg_a);
-        assert_eq!(aggr.mus()[1], msg_b);
-    }
+            let mut pks = HashMap::new();
+            pks.insert(pk.id(), pk);
 
-    #[test]
-    fn eval_two_users_multiple_msgs() {
-        // user A signs m1, m2
-        // user B signs m3
-        // labels order: [A, B, A] => ord_ids = [A, B]
-        // coeffs = [2, 3, 4]
-        // mu_A = 2*m1 + 4*m3_A, mu_B = 3*m2_B
-        const K: usize = 8;
-        let pp = Params::<K>::new();
-        let mut rng = test_rng();
+            let result = verify(&pp, &program, &pks, msg, &aggr).expect("verify errored");
 
-        let (sk_a, _) = keygen(&pp, &mut rng).unwrap();
-        let (sk_b, _) = keygen(&pp, &mut rng).unwrap();
-
-        let m1 = Scalar::rand(&mut rng);
-        let m2 = Scalar::rand(&mut rng);
-        let m3 = Scalar::rand(&mut rng);
-
-        let lab1 = Label::new(sk_a.id(), rand_tag::<K, _>(&mut rng));
-        let lab2 = Label::new(sk_b.id(), rand_tag::<K, _>(&mut rng));
-        let lab3 = Label::new(sk_a.id(), rand_tag::<K, _>(&mut rng));
-
-        let sh1 = sign(&pp, &sk_a, lab1, m1).unwrap();
-        let sh2 = sign(&pp, &sk_b, lab2, m2).unwrap();
-        let sh3 = sign(&pp, &sk_a, lab3, m3).unwrap();
-
-        let coeffs = vec![Scalar::from(2), Scalar::from(3), Scalar::from(4)];
-        let program = LabeledProgram::new(coeffs.clone(), vec![lab1, lab2, lab3]).unwrap();
-        let aggr = eval(&pp, &program, vec![sh1.clone(), sh2.clone(), sh3.clone()]).unwrap();
-
-        // ord_ids: A first, then B
-        assert_eq!(aggr.ord_ids().len(), 2);
-        assert_eq!(aggr.ord_ids()[0], sk_a.id());
-        assert_eq!(aggr.ord_ids()[1], sk_b.id());
-
-        // mu_A = 2*m1 + 4*m3
-        let expected_mu_a = Scalar::from(2) * m1 + Scalar::from(4) * m3;
-        assert_eq!(aggr.mus()[0], expected_mu_a);
-
-        // mu_B = 3*m2
-        let expected_mu_b = Scalar::from(3) * m2;
-        assert_eq!(aggr.mus()[1], expected_mu_b);
-
-        // gamma = 2*γ1 + 3*γ2 + 4*γ3
-        let expected_gamma = *sh1.gamma() * Scalar::from(2)
-            + *sh2.gamma() * Scalar::from(3)
-            + *sh3.gamma() * Scalar::from(4);
-        assert_eq!(*aggr.gamma(), expected_gamma);
-    }
-
-    #[test]
-    fn eval_zero_coefficients() {
-        // coeff=0 should contribute nothing
-        const K: usize = 8;
-        let pp = Params::<K>::new();
-        let mut rng = test_rng();
-
-        let (sk, _) = keygen(&pp, &mut rng).unwrap();
-
-        let m1 = Scalar::rand(&mut rng);
-        let m2 = Scalar::rand(&mut rng);
-
-        let lab1 = Label::new(sk.id(), rand_tag::<K, _>(&mut rng));
-        let lab2 = Label::new(sk.id(), rand_tag::<K, _>(&mut rng));
-
-        let sh1 = sign(&pp, &sk, lab1, m1).unwrap();
-        let sh2 = sign(&pp, &sk, lab2, m2).unwrap();
-
-        let coeffs = vec![Scalar::from(7), Scalar::zero()];
-        let program = LabeledProgram::new(coeffs, vec![lab1, lab2]).unwrap();
-        let aggr = eval(&pp, &program, vec![sh1.clone(), sh2]).unwrap();
-
-        // mu should only reflect m1
-        assert_eq!(aggr.mus()[0], Scalar::from(7) * m1);
-
-        // gamma should only reflect sh1
-        assert_eq!(*aggr.gamma(), *sh1.gamma() * Scalar::from(7));
-    }
-
-    #[test]
-    fn eval_length_mismatch_error() {
-        const K: usize = 8;
-        let pp = Params::<K>::new();
-        let mut rng = test_rng();
-
-        let (sk, _) = keygen(&pp, &mut rng).unwrap();
-
-        let lab = Label::new(sk.id(), rand_tag::<K, _>(&mut rng));
-        let sh = sign(&pp, &sk, lab, Scalar::from(42u64)).unwrap();
-
-        // 2 coeffs but 1 label
-        assert!(
-            LabeledProgram::new(vec![Scalar::from(1u64), Scalar::from(2u64)], vec![lab],).is_err()
-        );
-
-        // 1 coeff, 1 label, but 2 shares
-        let program = LabeledProgram::new(vec![Scalar::from(1u64)], vec![lab]).unwrap();
-        assert!(eval(&pp, &program, vec![sh.clone(), sh]).is_err());
-    }
-
-    #[test]
-    fn verify_smoke() {
-        const K: usize = 8;
-
-        let pp = Params::<K>::new();
-        let mut rng = test_rng();
-
-        // one signer
-        let (sk, pk) = keygen(&pp, &mut rng).expect("keygen failed");
-
-        let msg = Scalar::rand(&mut rng);
-        let label = Label::new(sk.id(), rand_tag::<K, _>(&mut rng));
-
-        let share = sign(&pp, &sk, label, msg).expect("sign failed");
-
-        // trivial linear program: f = 1
-        let program = LabeledProgram::new(vec![Scalar::from(1u64)], vec![label])
-            .expect("program build failed");
-
-        // aggregate
-        let aggr = eval(&pp, &program, vec![share]).expect("eval failed");
-
-        // prepare public key map
-        let mut pks = HashMap::new();
-        pks.insert(pk.id(), pk);
-
-        // verify
-        let result = verify(&pp, &program, &pks, msg, &aggr).expect("verify errored");
-
-        assert!(result);
+            assert!(result);
+        }
     }
 }
