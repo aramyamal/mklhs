@@ -67,7 +67,7 @@ fn organize<const K: usize>(labels: &[Label<K>]) -> (Vec<Id<K>>, Vec<Vec<usize>>
 
 pub fn eval<const K: usize>(
     _pp: &Params<K>,
-    program: LabeledProgram<K>,
+    program: &LabeledProgram<K>,
     sign_shares: Vec<SignShare<K>>,
 ) -> Result<SignAggr<K>, ProtocolError> {
     let coeffs = program.coeffs();
@@ -85,7 +85,7 @@ pub fn eval<const K: usize>(
         .map(|(i, f_i)| (*sign_shares[i].gamma()) * f_i)
         .sum();
 
-    // TODO: This is probably supported by more backends and but maybe not
+    // NOTE: This is probably supported by more backends and but maybe not
     // faster, will have to benchmark:
     // let gamma = coeffs
     // .iter()
@@ -193,7 +193,7 @@ mod tests {
         let program = LabeledProgram::new(vec![Scalar::from(1)], vec![label])
             .expect("labeled program build failed");
 
-        let aggr = eval(&pp, program, vec![share.clone()]).expect("eval failed");
+        let aggr = eval(&pp, &program, vec![share.clone()]).expect("eval failed");
 
         // gamma should match share.gamma (since coeff=1)
         assert_eq!(aggr.gamma(), share.gamma());
@@ -226,7 +226,7 @@ mod tests {
         let coeffs = vec![Scalar::from(2), Scalar::from(3), Scalar::from(5)];
 
         let program = LabeledProgram::new(coeffs.clone(), labels).unwrap();
-        let aggr = eval(&pp, program, shares.clone()).unwrap();
+        let aggr = eval(&pp, &program, shares.clone()).unwrap();
 
         // Only one signer
         assert_eq!(aggr.ord_ids().len(), 1);
@@ -265,7 +265,7 @@ mod tests {
 
         let coeffs = vec![Scalar::from(1), Scalar::from(1)];
         let program = LabeledProgram::new(coeffs, vec![lab_a, lab_b]).unwrap();
-        let aggr = eval(&pp, program, vec![sh_a.clone(), sh_b.clone()]).unwrap();
+        let aggr = eval(&pp, &program, vec![sh_a.clone(), sh_b.clone()]).unwrap();
 
         // two different signers
         assert_eq!(aggr.ord_ids().len(), 2);
@@ -308,7 +308,7 @@ mod tests {
 
         let coeffs = vec![Scalar::from(2), Scalar::from(3), Scalar::from(4)];
         let program = LabeledProgram::new(coeffs.clone(), vec![lab1, lab2, lab3]).unwrap();
-        let aggr = eval(&pp, program, vec![sh1.clone(), sh2.clone(), sh3.clone()]).unwrap();
+        let aggr = eval(&pp, &program, vec![sh1.clone(), sh2.clone(), sh3.clone()]).unwrap();
 
         // ord_ids: A first, then B
         assert_eq!(aggr.ord_ids().len(), 2);
@@ -350,7 +350,7 @@ mod tests {
 
         let coeffs = vec![Scalar::from(7), Scalar::zero()];
         let program = LabeledProgram::new(coeffs, vec![lab1, lab2]).unwrap();
-        let aggr = eval(&pp, program, vec![sh1.clone(), sh2]).unwrap();
+        let aggr = eval(&pp, &program, vec![sh1.clone(), sh2]).unwrap();
 
         // mu should only reflect m1
         assert_eq!(aggr.mus()[0], Scalar::from(7) * m1);
@@ -377,6 +377,6 @@ mod tests {
 
         // 1 coeff, 1 label, but 2 shares
         let program = LabeledProgram::new(vec![Scalar::from(1u64)], vec![lab]).unwrap();
-        assert!(eval(&pp, program, vec![sh.clone(), sh]).is_err());
+        assert!(eval(&pp, &program, vec![sh.clone(), sh]).is_err());
     }
 }

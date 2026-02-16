@@ -75,8 +75,8 @@ impl<const K: usize> PublicKey<K> {
         Self { id, value }
     }
 
-    pub const fn id(&self) -> &Id<K> {
-        &self.id
+    pub const fn id(&self) -> Id<K> {
+        self.id
     }
 
     pub const fn value(&self) -> &G2 {
@@ -96,12 +96,17 @@ pub struct SignAggr<const K: usize> {
 }
 
 impl<const K: usize> SignAggr<K> {
-    pub fn new(gamma: G1, ord_ids: Vec<Id<K>>, mus: Vec<Scalar>) -> Self {
-        Self {
+    pub fn new(gamma: G1, ord_ids: Vec<Id<K>>, mus: Vec<Scalar>) -> Result<Self, ProtocolError> {
+        if ord_ids.len() != mus.len() {
+            return Err(ProtocolError::InvalidInput(
+                "ord_ids/mus length mismatch".to_string(),
+            ));
+        }
+        Ok(Self {
             gamma,
             ord_ids,
             mus,
-        }
+        })
     }
 
     pub const fn gamma(&self) -> &G1 {
