@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    algebra::{G1, Scalar, g1_gen, g2_gen, hash_to_g1_with},
+    algebra::{G1, GT, Scalar, g1_gen, g2_gen, hash_to_g1_with, pairing},
     errors::ProtocolError,
     params::Params,
     types::{Id, Label, LabeledProgram, PublicKey, SecretKey, SignAggr, SignShare},
@@ -99,10 +99,81 @@ pub fn eval<const K: usize>(
         .map(|idxs| idxs.iter().map(|&i| coeffs[i] * sign_shares[i].mu()).sum())
         .collect();
 
-    Ok(SignAggr::new(gamma, ord_ids, mus))
+    SignAggr::new(gamma, ord_ids, mus)
 }
 
-// TODO: verify
+pub fn verify<const K: usize>(
+    pp: &Params<K>,
+    program: &LabeledProgram<K>,
+    pks: &HashMap<Id<K>, PublicKey<K>>,
+    msg: Scalar,
+    sign_aggr: &SignAggr<K>,
+) -> Result<bool, ProtocolError> {
+    // ver1
+    let mu_sum: Scalar = sign_aggr.mus().iter().sum();
+    if mu_sum != msg {
+        return Ok(false);
+    }
+
+    // create id to index table
+    let ord_ids = sign_aggr.ord_ids();
+    let mut id_to_j: HashMap<Id<K>, usize> = HashMap::with_capacity(ord_ids.len());
+    for (j, &id) in ord_ids.iter().enumerate() {
+        id_to_j.insert(id, j);
+    }
+
+    // initialize A_j = g1_gen * mu_j
+    let mut a: Vec<G1> = sign_aggr
+        .mus()
+        .iter()
+        .map(|mu_j| g1_gen() * *mu_j)
+        .collect();
+
+    // single pass: A[j] += f_i * H(label_i)
+    for (i, lab) in program.labels().iter().enumerate() {
+        let j = *id_to_j.get(&lab.id()).ok_or_else(|| {
+            ProtocolError::InvalidInput("program label id not in signature ord_ids".to_string())
+        })?;
+
+        let f_i = program.coeffs()[i];
+        if f_i.is_zero() {
+            continue;
+        }
+
+        let h_i = hash_to_g1_with(pp.h2g1_label(), &lab.to_bytes())?;
+        a[j] += h_i * f_i;
+    }
+
+    // compute each term to be multiplied
+    let terms = ord_ids
+        .iter()
+        .enumerate()
+        .map(|(j, id_j)| {
+            let pk = pks.get(id_j).ok_or_else(|| {
+                ProtocolError::InvalidInput("missing public key for ord_id".to_string())
+            })?;
+            Ok(pairing(&a[j], pk.value()))
+        })
+        .collect::<Result<Vec<GT>, ProtocolError>>()?;
+
+    let c: GT = terms.into_iter().product();
+
+    // NOTE: This might be more backend agnostic and avoids intermediary Vec
+    // let c: GT = ord_ids.iter().enumerate().try_fold(
+    //     gt_one(),
+    //     |acc, (j, id_j)| -> Result<GT, ProtocolError> {
+    //         let pk = pks.get(id_j).ok_or_else(|| {
+    //             ProtocolError::InvalidInput("missing public key for ord_id".to_string())
+    //         })?;
+    //         Ok(acc * pairing(&a[j], pk.value()))
+    //     },
+    // )?;
+
+    let lhs: GT = pairing(sign_aggr.gamma(), &g2_gen());
+
+    // ver2
+    Ok(lhs == c)
+}
 
 #[cfg(test)]
 mod tests {
@@ -378,5 +449,37 @@ mod tests {
         // 1 coeff, 1 label, but 2 shares
         let program = LabeledProgram::new(vec![Scalar::from(1u64)], vec![lab]).unwrap();
         assert!(eval(&pp, &program, vec![sh.clone(), sh]).is_err());
+    }
+
+    #[test]
+    fn verify_smoke() {
+        const K: usize = 8;
+
+        let pp = Params::<K>::new();
+        let mut rng = test_rng();
+
+        // one signer
+        let (sk, pk) = keygen(&pp, &mut rng).expect("keygen failed");
+
+        let msg = Scalar::rand(&mut rng);
+        let label = Label::new(sk.id(), rand_tag::<K, _>(&mut rng));
+
+        let share = sign(&pp, &sk, label, msg).expect("sign failed");
+
+        // trivial linear program: f = 1
+        let program = LabeledProgram::new(vec![Scalar::from(1u64)], vec![label])
+            .expect("program build failed");
+
+        // aggregate
+        let aggr = eval(&pp, &program, vec![share]).expect("eval failed");
+
+        // prepare public key map
+        let mut pks = HashMap::new();
+        pks.insert(pk.id(), pk);
+
+        // verify
+        let result = verify(&pp, &program, &pks, msg, &aggr).expect("verify errored");
+
+        assert!(result);
     }
 }

@@ -1,1 +1,1 @@
-pub use crate::protocol::{keygen, sign, eval};
+pub use crate::protocol::{keygen, sign, eval, verify};

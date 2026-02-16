@@ -22,6 +22,10 @@ pub fn g2_gen() -> G2 {
     G2::generator()
 }
 
+pub fn pairing(a: &G1, b: &G2) -> GT {
+    Bls12_381::pairing(a, b).0
+}
+
 pub type H2G1 =
     MapToCurveBasedHasher<G1Projective, DefaultFieldHasher<Sha256, 128>, WBMap<G1Config>>;
 
