@@ -1,9 +1,12 @@
-use crate::algebra::{G1, G2, Scalar};
+use crate::{
+    algebra::{G1, G2, Scalar},
+    errors::ProtocolError,
+};
 
 /// Identity element $\textsf{id}\in \textsf{ID}\subset \{ 0,1 \}^8\texttt{K}$
 ///
 /// Here `K` is the compile-time length in bytes, so the bit-length is `8*K`.
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug, Copy, PartialEq, Eq, Hash)]
 pub struct Id<const K: usize>(pub [u8; K]);
 
 /// Tag $\tau \in \mathcal{T} \subset \{ 0,1 \}^{8\texttt{K}}$
@@ -86,18 +89,27 @@ impl<const K: usize> PublicKey<K> {
 }
 
 #[derive(Clone, Debug)]
-pub struct SignAggr {
-    pub gamma: G1,
-    pub mus: Vec<Scalar>,
+pub struct SignAggr<const K: usize> {
+    gamma: G1,
+    ord_ids: Vec<Id<K>>,
+    mus: Vec<Scalar>,
 }
 
-impl SignAggr {
-    pub fn new(gamma: G1, mus: Vec<Scalar>) -> Self {
-        Self { gamma, mus }
+impl<const K: usize> SignAggr<K> {
+    pub fn new(gamma: G1, ord_ids: Vec<Id<K>>, mus: Vec<Scalar>) -> Self {
+        Self {
+            gamma,
+            ord_ids,
+            mus,
+        }
     }
 
     pub const fn gamma(&self) -> &G1 {
         &self.gamma
+    }
+
+    pub fn ord_ids(&self) -> &[Id<K>] {
+        &self.ord_ids
     }
 
     pub fn mus(&self) -> &[Scalar] {
@@ -111,7 +123,54 @@ impl SignAggr {
 
 #[derive(Clone, Debug)]
 pub struct SignShare<const K: usize> {
-    pub id: Id<K>,
-    pub gamma: G1,
-    pub mu: Scalar,
+    id: Id<K>,
+    gamma: G1,
+    mu: Scalar,
+}
+
+impl<const K: usize> SignShare<K> {
+    pub const fn new(id: Id<K>, gamma: G1, mu: Scalar) -> Self {
+        Self { id, gamma, mu }
+    }
+
+    pub fn id(&self) -> Id<K> {
+        self.id
+    }
+
+    pub fn gamma(&self) -> &G1 {
+        &self.gamma
+    }
+
+    pub fn mu(&self) -> &Scalar {
+        &self.mu
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct LabeledProgram<const K: usize> {
+    coeffs: Vec<Scalar>,
+    labels: Vec<Label<K>>,
+}
+
+impl<const K: usize> LabeledProgram<K> {
+    pub fn new(coeffs: Vec<Scalar>, labels: Vec<Label<K>>) -> Result<Self, ProtocolError> {
+        if coeffs.len() != labels.len() {
+            return Err(ProtocolError::InvalidInput(
+                "coeffs and labels length mismatch".to_string(),
+            ));
+        }
+        Ok(Self { coeffs, labels })
+    }
+
+    pub fn n(&self) -> usize {
+        self.coeffs.len()
+    }
+
+    pub fn coeffs(&self) -> &[Scalar] {
+        &self.coeffs
+    }
+
+    pub fn labels(&self) -> &[Label<K>] {
+        &self.labels
+    }
 }

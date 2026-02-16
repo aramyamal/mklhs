@@ -15,4 +15,7 @@ pub enum ProtocolError {
 
     #[error("randomness generation failed: {0}")]
     Rng(String),
+
+    #[error("invalid input: {0}")]
+    InvalidInput(String),
 }
