@@ -1,6 +1,6 @@
-# mklhs
+# `mklhs`
 
-A research implementation of the simplest **M**ulti-**K**ey **L**inearly **H**omomorphic **S**ignature (MKLHS) scheme by Aranha and Pagnin:
+An unaffiliated research implementation of the simplest **M**ulti-**K**ey **L**inearly **H**omomorphic **S**ignature (`mklhs`) scheme by Aranha and Pagnin from:
 
 > Aranha, D. F., & Pagnin, E.  
 > _The Simplest Multi-key Linearly Homomorphic Signature Scheme_  
