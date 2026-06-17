@@ -19,6 +19,7 @@ use mkqhs::{
 
 const K: usize = 8;
 const T_VALUES: &[usize] = &[2, 5, 10];
+const MSGS_PER_SIGNER: usize = 16;
 
 fn sk_size(sk: &SecretKey<K>) -> usize {
     sk.value().compressed_size()
@@ -39,20 +40,24 @@ fn lhs_eval_sig_size(sig: &SignAggr<K>) -> usize {
 
 fn make_lhs_eval_sig(pp: &Params<K>, t: usize) -> SignAggr<K> {
     let mut rng = test_rng();
+    let n = t * MSGS_PER_SIGNER;
     let mut sks = Vec::new();
     for _ in 0..t {
         let (sk, _pk) = keygen(pp, &mut rng).unwrap();
         sks.push(sk);
     }
-    let msgs: Vec<Scalar> = (0..t).map(|_| Scalar::rand(&mut rng)).collect();
+    let msgs: Vec<Scalar> = (0..n).map(|_| Scalar::rand(&mut rng)).collect();
     let mut labels = Vec::new();
     let mut shares = Vec::new();
     for i in 0..t {
-        let lab = Label::new(sks[i].id(), Tag((i as u64).to_le_bytes()));
-        labels.push(lab);
-        shares.push(lhs_sign(pp, &sks[i], lab, msgs[i]).unwrap());
+        for j in 0..MSGS_PER_SIGNER {
+            let idx = i * MSGS_PER_SIGNER + j;
+            let lab = Label::new(sks[i].id(), Tag((idx as u64).to_le_bytes()));
+            labels.push(lab);
+            shares.push(lhs_sign(pp, &sks[i], lab, msgs[idx]).unwrap());
+        }
     }
-    let coeffs: Vec<Scalar> = (0..t).map(|_| Scalar::rand(&mut rng)).collect();
+    let coeffs: Vec<Scalar> = (0..n).map(|_| Scalar::rand(&mut rng)).collect();
     let program = LabeledProgram::new(coeffs, labels).unwrap();
     lhs_eval(pp, &program, shares).unwrap()
 }
@@ -88,25 +93,29 @@ fn msq_eval_sig_size<const R: usize>(sig: &QuadEvalSig2Msq<K, R>) -> usize {
 
 fn make_msq_eval_sig<const R: usize>(pp: &Params<K>, t: usize) -> QuadEvalSig2Msq<K, R> {
     let mut rng = test_rng();
+    let n = t * MSGS_PER_SIGNER;
     let mut sks = Vec::new();
     for _ in 0..t {
         let (sk, _pk) = keygen(pp, &mut rng).unwrap();
         sks.push(sk);
     }
-    let msgs: Vec<Scalar> = (0..t).map(|_| Scalar::rand(&mut rng)).collect();
+    let msgs: Vec<Scalar> = (0..n).map(|_| Scalar::rand(&mut rng)).collect();
     let mut labels = Vec::new();
     let mut shares = Vec::new();
     for i in 0..t {
-        let lab = Label::new(sks[i].id(), Tag((i as u64).to_le_bytes()));
-        labels.push(lab);
-        shares.push(msq_sign(pp, &sks[i], lab, msgs[i]).unwrap());
+        for j in 0..MSGS_PER_SIGNER {
+            let idx = i * MSGS_PER_SIGNER + j;
+            let lab = Label::new(sks[i].id(), Tag((idx as u64).to_le_bytes()));
+            labels.push(lab);
+            shares.push(msq_sign(pp, &sks[i], lab, msgs[idx]).unwrap());
+        }
     }
-    let a_coeffs: Vec<Scalar> = (0..t).map(|_| Scalar::rand(&mut rng)).collect();
-    let b_coeffs: Vec<Scalar> = (0..t).map(|_| Scalar::rand(&mut rng)).collect();
-    let u_mat: Vec<[Scalar; R]> = (0..t)
+    let a_coeffs: Vec<Scalar> = (0..n).map(|_| Scalar::rand(&mut rng)).collect();
+    let b_coeffs: Vec<Scalar> = (0..n).map(|_| Scalar::rand(&mut rng)).collect();
+    let u_mat: Vec<[Scalar; R]> = (0..n)
         .map(|_| std::array::from_fn(|_| Scalar::rand(&mut rng)))
         .collect();
-    let v_mat: Vec<[Scalar; R]> = (0..t)
+    let v_mat: Vec<[Scalar; R]> = (0..n)
         .map(|_| std::array::from_fn(|_| Scalar::rand(&mut rng)))
         .collect();
     let program = QuadProgramMsq::<K, R>::new(a_coeffs, b_coeffs, u_mat, v_mat, labels).unwrap();
