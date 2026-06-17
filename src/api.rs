@@ -7,4 +7,4 @@ pub use crate::mkqhs_cbr_msq;
 /// keygen is scheme-agnostic, i.e. all schemes share the same key generation.
 pub use crate::mklhs::keygen;
 
-pub use crate::algebra::{Scalar, scalar_inverse, scalar_to_u64, scalar_zero};
+pub use crate::algebra::{Scalar, scalar_inverse, scalar_is_zero, scalar_to_u64, scalar_zero};

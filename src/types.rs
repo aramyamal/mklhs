@@ -379,8 +379,8 @@ impl<const K: usize, const R: usize> QuadEvalSig2<K, R> {
 
 /// Signature share with message-squares component:
 /// $\sigma_i = (\mathsf{id}_i, \gamma_i, \gamma_i', \mu_i)$ where
-/// $\gamma_i = (H_1(\ell_i) \cdot g_1^{m_i})^{\mathsf{sk}}$ and
-/// $\gamma_i' = (H_2(\ell_i) \cdot g_1^{m_i^2})^{\mathsf{sk}}$.
+/// $\gamma_i = (H_1(\mathsf{pk}_{\mathsf{id}}, \ell_i) \cdot g_1^{m_i})^{\mathsf{sk}}$ and
+/// $\gamma_i' = (H_2(\mathsf{pk}_{\mathsf{id}}, \ell_i) \cdot g_1^{m_i^2})^{\mathsf{sk}}$.
 #[derive(Clone, Debug)]
 pub struct SignShareMsq<const K: usize> {
     id: Id<K>,

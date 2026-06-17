@@ -8,10 +8,13 @@ use std::collections::HashMap;
 use ark_bls12_381::Bls12_381;
 use ark_ec::{CurveGroup, VariableBaseMSM, pairing::Pairing};
 use ark_ff::Field;
-use ark_std::{UniformRand, Zero};
+use ark_serialize::CanonicalSerialize;
+use ark_std::UniformRand;
 
 use crate::{
-    algebra::{G1, GT, Scalar, g1_gen, g2_gen, hash_to_g1_with, pairing},
+    algebra::{
+        G1, GT, Scalar, g1_gen, g2_gen, hash_to_g1_with, pairing, scalar_is_zero, scalar_zero,
+    },
     errors::ProtocolError,
     params::Params,
     types::{
@@ -28,8 +31,12 @@ pub fn sign<const K: usize>(
     msg: Scalar,
 ) -> Result<SignShareMsq<K>, ProtocolError> {
     let label_bytes = label.to_bytes();
-    let h1 = hash_to_g1_with(pp.h2g1_label(), &label_bytes)?;
-    let h2 = hash_to_g1_with(pp.h2g1_label2(), &label_bytes)?;
+    let pk = g2_gen() * (*sk.value());
+    let mut pk_bytes = Vec::new();
+    pk.serialize_uncompressed(&mut pk_bytes).unwrap();
+    let hash_input = [pk_bytes.as_slice(), label_bytes.as_slice()].concat();
+    let h1 = hash_to_g1_with(pp.h2g1_label(), &hash_input)?;
+    let h2 = hash_to_g1_with(pp.h2g1_label2(), &hash_input)?;
 
     let gamma = (h1 + g1_gen() * msg) * (*sk.value());
     let gamma_sq = (h2 + g1_gen() * msg.square()) * (*sk.value());
@@ -83,9 +90,9 @@ pub fn eval<const K: usize, const R: usize>(
 
     // per-id $\mu_{\mathsf{id}}^{(a,b)}$ and
     // $\boldsymbol\mu_{\mathsf{id}}^{(u)}, \boldsymbol\mu_{\mathsf{id}}^{(v)}$
-    let mut mu_ab = vec![Scalar::zero(); t];
-    let mut mu_u: Vec<[Scalar; R]> = vec![[Scalar::zero(); R]; t];
-    let mut mu_v: Vec<[Scalar; R]> = vec![[Scalar::zero(); R]; t];
+    let mut mu_ab = vec![scalar_zero(); t];
+    let mut mu_u: Vec<[Scalar; R]> = vec![[scalar_zero(); R]; t];
+    let mut mu_v: Vec<[Scalar; R]> = vec![[scalar_zero(); R]; t];
 
     for (j, idxs) in groups.iter().enumerate() {
         for &i in idxs {
@@ -126,8 +133,8 @@ pub fn verify<const K: usize, const R: usize>(
     // \sum_{\mathsf{id}} \boldsymbol\mu_{\mathsf{id}}^{(v)}\rangle
     // $$
     let mu_ab_sum: Scalar = mu_ab.iter().sum();
-    let mut mu_u_sum = [Scalar::zero(); R];
-    let mut mu_v_sum = [Scalar::zero(); R];
+    let mut mu_u_sum = [scalar_zero(); R];
+    let mut mu_v_sum = [scalar_zero(); R];
     for j in 0..t {
         for r in 0..R {
             mu_u_sum[r] += mu_u[j][r];
@@ -149,12 +156,26 @@ pub fn verify<const K: usize, const R: usize>(
         })
         .collect::<Result<_, _>>()?;
 
+    // Precompute serialized pk bytes per id
+    let pk_bytes_by_j: Vec<Vec<u8>> = ord_ids
+        .iter()
+        .map(|id| {
+            let mut bytes = Vec::new();
+            pks.get(id)
+                .unwrap()
+                .value()
+                .serialize_uncompressed(&mut bytes)
+                .unwrap();
+            bytes
+        })
+        .collect();
+
     // ver2:
     // $$
     // e(\gamma^{(a,b)}, g_2) =
     // \prod_{\mathsf{id}} e(g_1^{\mu_{\mathsf{id}}^{(a,b)}} \cdot
-    // \prod_{i\in \mathcal{I}_{\mathsf{id}}} H_1(\ell_i)^{a_i} H_2(\ell_i)^{b_i},
-    // \mathsf{pk}_{\mathsf{id}})
+    // \prod_{i\in \mathcal{I}_{\mathsf{id}}} H_1(\mathsf{pk}_\mathsf{id}, \ell_i)^{a_i}
+    // H_2(\mathsf{pk}_\mathsf{id}, \ell_i)^{b_i}, \mathsf{pk}_{\mathsf{id}})
     // $$
     let mut a_pts: Vec<G1> = mu_ab.iter().map(|mu_j| g1_gen() * *mu_j).collect();
     {
@@ -168,13 +189,14 @@ pub fn verify<const K: usize, const R: usize>(
             })?;
             let ai = program.a()[i];
             let bi = program.b()[i];
-            if !ai.is_zero() {
-                let h1 = hash_to_g1_with(pp.h2g1_label(), &lab.to_bytes())?;
+            let hash_input = [pk_bytes_by_j[j].as_slice(), &lab.to_bytes()].concat();
+            if !scalar_is_zero(&ai) {
+                let h1 = hash_to_g1_with(pp.h2g1_label(), &hash_input)?;
                 h1_bases[j].push(h1.into_affine());
                 h1_scalars[j].push(ai);
             }
-            if !bi.is_zero() {
-                let h2 = hash_to_g1_with(pp.h2g1_label2(), &lab.to_bytes())?;
+            if !scalar_is_zero(&bi) {
+                let h2 = hash_to_g1_with(pp.h2g1_label2(), &hash_input)?;
                 h2_bases[j].push(h2.into_affine());
                 h2_scalars[j].push(bi);
             }
@@ -204,7 +226,8 @@ pub fn verify<const K: usize, const R: usize>(
     // \prod_{\mathsf{id}} e\!\left(g_1^{\langle\boldsymbol\rho,
     // \boldsymbol\mu_{\mathsf{id}}^{(u)}\rangle + \langle\boldsymbol\rho',
     // \boldsymbol\mu_{\mathsf{id}}^{(v)}\rangle} \cdot
-    // \prod_{i\in \mathcal{I}_{\mathsf{id}}} H_1(\ell_i)^{\langle\boldsymbol\rho,
+    // \prod_{i\in \mathcal{I}_{\mathsf{id}}}
+    // H_1(\mathsf{pk}_{\mathsf {id}}, \ell_i)^{\langle\boldsymbol\rho,
     // \mathbf u_i\rangle+\langle\boldsymbol\rho',\mathbf v_i\rangle},
     // \mathsf{pk}_{\mathsf{id}}\right)
     // $$
@@ -214,6 +237,10 @@ pub fn verify<const K: usize, const R: usize>(
 
     let gu_aff: Vec<_> = sig.gamma_u().iter().map(|p| p.into_affine()).collect();
     let gv_aff: Vec<_> = sig.gamma_v().iter().map(|p| p.into_affine()).collect();
+    // $$
+    // \Gamma_{\rho} =
+    // (\boldsymbol{\gamma}^{(u)})^{\boldsymbol\rho}(\boldsymbol{\gamma}^{(v)})^{\boldsymbol\rho'}
+    // $$
     let gamma_rho = G1::msm_unchecked(&gu_aff, &rho) + G1::msm_unchecked(&gv_aff, &rho_prime);
 
     let mut b_pts: Vec<G1> = (0..t)
@@ -232,8 +259,9 @@ pub fn verify<const K: usize, const R: usize>(
             let ui = &program.u()[i];
             let vi = &program.v()[i];
             let coeff: Scalar = (0..R).map(|r| rho[r] * ui[r] + rho_prime[r] * vi[r]).sum();
-            if !coeff.is_zero() {
-                let h1 = hash_to_g1_with(pp.h2g1_label(), &lab.to_bytes())?;
+            if !scalar_is_zero(&coeff) {
+                let hash_input = [pk_bytes_by_j[j].as_slice(), &lab.to_bytes()].concat();
+                let h1 = hash_to_g1_with(pp.h2g1_label(), &hash_input)?;
                 hb_bases[j].push(h1.into_affine());
                 hb_scalars[j].push(coeff);
             }

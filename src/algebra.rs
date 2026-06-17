@@ -18,6 +18,11 @@ pub fn scalar_zero() -> Scalar {
     Scalar::zero()
 }
 
+pub fn scalar_is_zero(s: &Scalar) -> bool {
+    use ark_ff::Zero;
+    s.is_zero()
+}
+
 pub fn scalar_inverse(s: &Scalar) -> Option<Scalar> {
     use ark_ff::Field;
     s.inverse()

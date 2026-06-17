@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    algebra::{G1, GT, Scalar, g1_gen, g2_gen, hash_to_g1_with, pairing},
+    algebra::{G1, GT, Scalar, g1_gen, g2_gen, hash_to_g1_with, pairing, scalar_is_zero},
     errors::ProtocolError,
     params::Params,
     types::{Id, Label, LabeledProgram, PublicKey, SecretKey, SignAggr, SignShare, organize},
@@ -9,7 +9,7 @@ use crate::{
 
 use ark_bls12_381::Bls12_381;
 use ark_ec::{CurveGroup, VariableBaseMSM, pairing::Pairing};
-use ark_std::{UniformRand, Zero, rand::RngCore};
+use ark_std::{UniformRand, rand::RngCore};
 
 pub fn keygen<const K: usize, R: RngCore>(
     _pp: &Params<K>,
@@ -21,7 +21,7 @@ pub fn keygen<const K: usize, R: RngCore>(
     let id = Id(id_bytes);
 
     let mut x = Scalar::rand(rng);
-    while x.is_zero() {
+    while scalar_is_zero(&x) {
         x = Scalar::rand(rng);
     }
     let sk = SecretKey::new(id, x);
@@ -113,7 +113,7 @@ pub fn verify<const K: usize>(
             ProtocolError::InvalidInput("program label id not in signer groups".to_string())
         })?;
         let f_i = program.coeffs()[i];
-        if f_i.is_zero() {
+        if scalar_is_zero(&f_i) {
             continue;
         }
         let h_i = hash_to_g1_with(pp.h2g1_label(), &lab.to_bytes())?;
@@ -226,6 +226,7 @@ mod tests {
 
         use super::*;
 
+        use ark_std::Zero;
         #[test]
         fn smoke() {
             const K: usize = 8;

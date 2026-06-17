@@ -12,14 +12,14 @@ use ark_bls12_381::Bls12_381;
 use ark_ec::{CurveGroup, VariableBaseMSM, pairing::Pairing};
 use ark_ff::{Field, PrimeField};
 use ark_serialize::CanonicalSerialize;
-use ark_std::Zero;
 use sha2::{Digest, Sha256};
 
 pub use crate::mklhs::keygen;
 pub use crate::mkqhs_br_msq::sign;
 
 use crate::{
-    algebra::{G1, GT, Scalar, g1_gen, g2_gen, hash_to_g1_with, pairing},
+    algebra::{G1, GT, Scalar, g1_gen, g2_gen, hash_to_g1_with, pairing, scalar_is_zero},
+    api::scalar_zero,
     errors::ProtocolError,
     params::Params,
     types::{Id, PublicKey, QuadEvalSig2Msq, QuadProgramMsq, SignShareMsq, organize},
@@ -43,40 +43,40 @@ fn h_fs<const K: usize, const R: usize>(
         buf.extend_from_slice(&lab.to_bytes());
     }
     for x in program.a() {
-        x.serialize_compressed(&mut buf).unwrap();
+        x.serialize_uncompressed(&mut buf).unwrap();
     }
     for x in program.b() {
-        x.serialize_compressed(&mut buf).unwrap();
+        x.serialize_uncompressed(&mut buf).unwrap();
     }
     for ui in program.u() {
         for x in ui {
-            x.serialize_compressed(&mut buf).unwrap();
+            x.serialize_uncompressed(&mut buf).unwrap();
         }
     }
     for vi in program.v() {
         for x in vi {
-            x.serialize_compressed(&mut buf).unwrap();
+            x.serialize_uncompressed(&mut buf).unwrap();
         }
     }
 
     // Gamma components
-    gamma_ab.serialize_compressed(&mut buf).unwrap();
+    gamma_ab.serialize_uncompressed(&mut buf).unwrap();
     for g in gamma_u {
-        g.serialize_compressed(&mut buf).unwrap();
+        g.serialize_uncompressed(&mut buf).unwrap();
     }
     for g in gamma_v {
-        g.serialize_compressed(&mut buf).unwrap();
+        g.serialize_uncompressed(&mut buf).unwrap();
     }
 
     // Per-id linear-square sums and global quadratic vectors
     for x in mu_ab {
-        x.serialize_compressed(&mut buf).unwrap();
+        x.serialize_uncompressed(&mut buf).unwrap();
     }
     for x in mu_u_global {
-        x.serialize_compressed(&mut buf).unwrap();
+        x.serialize_uncompressed(&mut buf).unwrap();
     }
     for x in mu_v_global {
-        x.serialize_compressed(&mut buf).unwrap();
+        x.serialize_uncompressed(&mut buf).unwrap();
     }
 
     let seed: [u8; 32] = Sha256::digest(&buf).into();
@@ -89,8 +89,8 @@ fn h_fs<const K: usize, const R: usize>(
         Scalar::from_le_bytes_mod_order(&bytes)
     };
 
-    let mut rho = [Scalar::zero(); R];
-    let mut rho_prime = [Scalar::zero(); R];
+    let mut rho = [scalar_zero(); R];
+    let mut rho_prime = [scalar_zero(); R];
     for r in 0..R {
         rho[r] = derive(r as u64);
         rho_prime[r] = derive(R as u64 + r as u64);
@@ -144,11 +144,11 @@ pub fn eval<const K: usize, const R: usize>(
     // per-id $\mu_{\mathsf{id}}^{(a,b)}$ and
     // $\boldsymbol\mu_{\mathsf{id}}^{(u)}, \boldsymbol\mu_{\mathsf{id}}^{(v)}$;
     // also global $\boldsymbol\mu^{(u)}, \boldsymbol\mu^{(v)}$
-    let mut mu_ab = vec![Scalar::zero(); t];
-    let mut mu_u_per_id: Vec<[Scalar; R]> = vec![[Scalar::zero(); R]; t];
-    let mut mu_v_per_id: Vec<[Scalar; R]> = vec![[Scalar::zero(); R]; t];
-    let mut mu_u_global = [Scalar::zero(); R];
-    let mut mu_v_global = [Scalar::zero(); R];
+    let mut mu_ab = vec![scalar_zero(); t];
+    let mut mu_u_per_id: Vec<[Scalar; R]> = vec![[scalar_zero(); R]; t];
+    let mut mu_v_per_id: Vec<[Scalar; R]> = vec![[scalar_zero(); R]; t];
+    let mut mu_u_global = [scalar_zero(); R];
+    let mut mu_v_global = [scalar_zero(); R];
 
     for (j, idxs) in groups.iter().enumerate() {
         for &i in idxs {
@@ -256,11 +256,26 @@ pub fn verify<const K: usize, const R: usize>(
         })
         .collect::<Result<_, _>>()?;
 
+    // Precompute serialized pk bytes per id
+    let pk_bytes_by_j: Vec<Vec<u8>> = ord_ids
+        .iter()
+        .map(|id| {
+            let mut bytes = Vec::new();
+            pks.get(id)
+                .unwrap()
+                .value()
+                .serialize_uncompressed(&mut bytes)
+                .unwrap();
+            bytes
+        })
+        .collect();
+
     // ver2:
     // $$
     // e(\gamma^{(a,b)}, g_2) = \prod_{\mathsf{id}} e\!\left(g_1^{\mu_{\mathsf{id}}^{(a,b)}} \cdot
     // \prod_{i\in \mathcal{I}_{\mathsf{id}}}
-    // H_1(\ell_i)^{a_i} H_2(\ell_i)^{b_i},\ \mathsf{pk}_{\mathsf{id}}\right)
+    // H_1(\mathsf{pk}_{\mathsf {id}}, \ell_i)^{a_i} H_2(\mathsf{pk}_{\mathsf{id}}, \ell_i)^{b_i},\
+    // \mathsf{pk}_{\mathsf{id}}\right)
     // $$
     let mut a_pts: Vec<G1> = mu_ab.iter().map(|mu_j| g1_gen() * *mu_j).collect();
     {
@@ -274,13 +289,14 @@ pub fn verify<const K: usize, const R: usize>(
             })?;
             let ai = program.a()[i];
             let bi = program.b()[i];
-            if !ai.is_zero() {
-                let h1 = hash_to_g1_with(pp.h2g1_label(), &lab.to_bytes())?;
+            let hash_input = [pk_bytes_by_j[j].as_slice(), &lab.to_bytes()].concat();
+            if !scalar_is_zero(&ai) {
+                let h1 = hash_to_g1_with(pp.h2g1_label(), &hash_input)?;
                 h1_bases[j].push(h1.into_affine());
                 h1_scalars[j].push(ai);
             }
-            if !bi.is_zero() {
-                let h2 = hash_to_g1_with(pp.h2g1_label2(), &lab.to_bytes())?;
+            if !scalar_is_zero(&bi) {
+                let h2 = hash_to_g1_with(pp.h2g1_label2(), &hash_input)?;
                 h2_bases[j].push(h2.into_affine());
                 h2_scalars[j].push(bi);
             }
@@ -320,12 +336,16 @@ pub fn verify<const K: usize, const R: usize>(
     // ver4:
     // $$
     // e(\Gamma_\rho, g_2) = \prod_{\mathsf{id}} e\!\left(g_1^{\tilde\mu_{\mathsf{id}}^{(u,v)}}
-    // \cdot \prod_{i\in \mathcal{I}_{\mathsf{id}}} H_1(\ell_i)^{\langle\boldsymbol\rho,
+    // \cdot \prod_{i\in \mathcal{I}_{\mathsf{id}}} H_1(\mathsf{pk}_\mathsf{id}, \ell_i)^{\langle\boldsymbol\rho,
     // \mathbf u_i\rangle+\langle\boldsymbol\rho',\mathbf v_i\rangle},
     // \mathsf{pk}_{\mathsf{id}}\right)
     // $$
     let gu_aff: Vec<_> = sig.gamma_u().iter().map(|p| p.into_affine()).collect();
     let gv_aff: Vec<_> = sig.gamma_v().iter().map(|p| p.into_affine()).collect();
+    // $$
+    // \Gamma_{\rho} =
+    // (\boldsymbol{\gamma}^{(u)})^{\boldsymbol\rho}(\boldsymbol{\gamma}^{(v)})^{\boldsymbol\rho'}
+    // $$
     let gamma_rho = G1::msm_unchecked(&gu_aff, &rho) + G1::msm_unchecked(&gv_aff, &rho_prime);
 
     let mut c_pts: Vec<G1> = mu_uv.iter().map(|s| g1_gen() * *s).collect();
@@ -337,8 +357,9 @@ pub fn verify<const K: usize, const R: usize>(
             let ui = &program.u()[i];
             let vi = &program.v()[i];
             let coeff: Scalar = (0..R).map(|r| rho[r] * ui[r] + rho_prime[r] * vi[r]).sum();
-            if !coeff.is_zero() {
-                let h1 = hash_to_g1_with(pp.h2g1_label(), &lab.to_bytes())?;
+            if !scalar_is_zero(&coeff) {
+                let hash_input = [pk_bytes_by_j[j].as_slice(), &lab.to_bytes()].concat();
+                let h1 = hash_to_g1_with(pp.h2g1_label(), &hash_input)?;
                 hc_bases[j].push(h1.into_affine());
                 hc_scalars[j].push(coeff);
             }
