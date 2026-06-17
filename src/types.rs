@@ -541,7 +541,7 @@ impl<const K: usize, const R: usize> QuadEvalSig2Msq<K, R> {
         mu_u_global: [Scalar; R],
         mu_v_global: [Scalar; R],
     ) -> Result<Self, ProtocolError> {
-        if mu_uv.len() != mu_ab.len() {
+        if mu_uv.len() != mu_ab.len() && !(R == 0 && mu_uv.is_empty()) {
             return Err(ProtocolError::InvalidInput(
                 "QuadEvalSig2Msq length mismatch".to_string(),
             ));

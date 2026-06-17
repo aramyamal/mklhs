@@ -186,13 +186,17 @@ pub fn eval<const K: usize, const R: usize>(
     // \boldsymbol\mu_{\mathsf{id}}^{(u)}\rangle +
     // \langle\boldsymbol\rho', \boldsymbol\mu_{\mathsf{id}}^{(v)}\rangle
     // $$
-    let mu_uv: Vec<Scalar> = (0..t)
-        .map(|j| {
-            (0..R)
-                .map(|r| rho[r] * mu_u_per_id[j][r] + rho_prime[r] * mu_v_per_id[j][r])
-                .sum()
-        })
-        .collect();
+    let mu_uv: Vec<Scalar> = if R == 0 {
+        vec![]
+    } else {
+        (0..t)
+            .map(|j| {
+                (0..R)
+                    .map(|r| rho[r] * mu_u_per_id[j][r] + rho_prime[r] * mu_v_per_id[j][r])
+                    .sum()
+            })
+            .collect()
+    };
 
     QuadEvalSig2Msq::new(
         gamma_ab,
@@ -320,6 +324,9 @@ pub fn verify<const K: usize, const R: usize>(
         return Ok(false);
     }
 
+    if R == 0 {
+        return Ok(true);
+    }
     // ver3:
     // $$
     // \sum_{\mathsf{id}} \tilde\mu_{\mathsf{id}}^{(u,v)} =
