@@ -3,9 +3,11 @@
 
 > **Work in progress.**
 
-Research implementation of multi-key homomorphic signature (MKHS) schemes developed as part of an
-ongoing thesis. Extends the baseline `mklhs` scheme of Aranha and Pagnin
-([ePrint 2019/830](https://eprint.iacr.org/2019/830)) to bounded-rank quadratic evaluation.
+Research implementation of multi-key homomorphic signature (MKHS) schemes.
+The main contribution is $\textsf{mkqhs}$ (`mkqhs_cbr_msq`), a multi-key
+quadratic homomorphic signature scheme supporting bounded-rank quadratic functions with
+message-squares. It builds on the baseline $\textsf{mklhs}$ scheme of Aranha and Pagnin
+([ePrint 2019/830](https://eprint.iacr.org/2019/830)).
 
 **Research artifact. Not audited. Do not use in production.**
 
@@ -16,22 +18,23 @@ ongoing thesis. Extends the baseline `mklhs` scheme of Aranha and Pagnin
 > IACR Cryptology ePrint Archive, Paper 2019/830
 > https://eprint.iacr.org/2019/830
 
-The quadratic schemes are contributions of an ongoing thesis.
-
 ## Schemes
+
+The paper presents two schemes: $\textsf{mklhs}$ as the baseline and $\textsf{mkqhs}$ as the
+main contribution. The intermediate constructions (`mkqhs_br`, `mkqhs_cbr`, `mkqhs_br_msq`) are
+stepping stones not named in the paper.
 
 | Module          | Scheme                                                                              | Function class | Eval. sig. size | Status      |
 | --------------- | ----------------------------------------------------------------------------------- | -------------- | --------------- | ----------- |
 | `mklhs`         | $\textsf{mklhs}$: Multi-key linearly homomorphic signatures (Aranha–Pagnin 2019)    | (0)            | $O(t)$          | implemented |
-| `mkqhs_br`      | $\textsf{mkqhs-}\textsf{br}$: Bounded-rank quadratic, baseline                       | (1)            | $O(tR)$         | skeleton    |
-| `mkqhs_cbr`     | $\textsf{mkqhs-}\tilde{\textsf{br}}$: Bounded-rank quadratic, compressed             | (1)            | $O(t+R)$        | skeleton    |
-| `mkqhs_br_msq`  | `mkqhs_br` with message-squares extension                                           | (2)            | $O(tR)$         | implemented |
-| `mkqhs_cbr_msq` | `mkqhs_cbr` with message-squares extension                                          | (2)            | $O(t+R)$        | implemented |
+| `mkqhs_br`      | Bounded-rank quadratic, baseline (intermediate)                                     | (1)            | $O(tR)$         | skeleton    |
+| `mkqhs_cbr`     | Bounded-rank quadratic, compressed (intermediate)                                   | (1)            | $O(t+R)$        | skeleton    |
+| `mkqhs_br_msq`  | Bounded-rank quadratic with message-squares, baseline (intermediate)                | (2)            | $O(tR)$         | implemented |
+| `mkqhs_cbr_msq` | $\textsf{mkqhs}$: Bounded-rank quadratic with message-squares, compressed           | (2)            | $O(t+R)$        | implemented |
 
-All quadratic schemes remain secure under the co-CDH\* assumption in the Type-3 pairing
-setting. The evaluated signature size is reported in the number of signers $t$ and the
-bounded rank $R$. Succinctness requires $R$ to grow at most logarithmically in the number
-of message inputs.
+$\textsf{mkqhs}$ is secure under the co-CDH\* assumption in the Type-3 pairing setting. The
+evaluated signature size is reported in the number of signers $t$ and the bounded rank $R$.
+Succinctness requires $R$ to grow at most logarithmically in the number of message inputs.
 
 ### Function Class (0)
 
@@ -75,8 +78,8 @@ cargo example <name>
 
 | Example              | Scheme         | Description                                                                                |
 | -------------------- | -------------- | ------------------------------------------------------------------------------------------ |
-| `variance`           | `mkqhs_br_msq` | Verifiable variance of the diabetes target variable across 10 signers                      |
-| `euclidean_distance` | `mkqhs_br_msq` | Verifiable squared Euclidean distance between two randomly sampled patients (age, bmi, bp) |
+| `variance`           | $\textsf{mkqhs}$ | Verifiable variance of the diabetes target variable across 10 signers                      |
+| `euclidean_distance` | $\textsf{mkqhs}$ | Verifiable squared Euclidean distance between two randomly sampled patients (age, bmi, bp) |
 
 ### Dataset
 
@@ -95,8 +98,8 @@ cargo bench --bench <name>
 
 | Bench                  | Scheme          | Measures                                                                                                                                                 |
 | ---------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mklhs_cycles`         | `mklhs`         | CPU cycles for `keygen`, `sign`, `eval`, `verify` over $t \in$ {2, 5, 10} signers, each user signing 16 messages.                                      |
-| `mkqhs_cbr_msq_cycles` | `mkqhs_cbr_msq` | CPU cycles for `keygen`, `sign`, `eval`, `verify` over $t \in$ {2, 5, 10} signers, each user signing 16 messages, swept over ranks $R \in$ {1,2,4,8} |
+| `mklhs_cycles`         | $\textsf{mklhs}$         | CPU cycles for `keygen`, `sign`, `eval`, `verify` over $t \in$ {2, 5, 10} signers, each user signing 16 messages.                                      |
+| `mkqhs_cbr_msq_cycles` | $\textsf{mkqhs}$ | CPU cycles for `keygen`, `sign`, `eval`, `verify` over $t \in$ {2, 5, 10} signers, each user signing 16 messages, swept over ranks $R \in$ {0,1,2,4,8} |
 | `artifact_sizes`       | both            | Compressed byte sizes of keys, fresh signatures, and eval signatures                                                                                     |
 
 Criterion writes HTML reports to `target/criterion/`.
