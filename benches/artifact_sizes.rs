@@ -166,6 +166,7 @@ fn main() {
                 );
             }};
         }
+        msq_line!(0);
         msq_line!(1);
         msq_line!(2);
         msq_line!(4);

@@ -106,6 +106,7 @@ macro_rules! bench_for_r {
     };
 }
 
+bench_for_r!(bench_r0, 0);
 bench_for_r!(bench_r1, 1);
 bench_for_r!(bench_r2, 2);
 bench_for_r!(bench_r4, 4);
@@ -116,6 +117,11 @@ criterion_group!(
     name = keygen_sign;
     config = Criterion::default().with_measurement(CyclesPerByte);
     targets = bench_keygen, bench_sign
+);
+criterion_group!(
+    name = r0;
+    config = Criterion::default().with_measurement(CyclesPerByte);
+    targets = bench_r0
 );
 criterion_group!(
     name = r1;
@@ -143,6 +149,6 @@ criterion_group!(
 //     config = Criterion::default().with_measurement(CyclesPerByte);
 //     targets = bench_r16
 // );
-// criterion_main!(keygen_sign, r1, r2, r4, r8, r16);
+// criterion_main!(keygen_sign, r0, r1, r2, r4, r8, r16);
 
-criterion_main!(keygen_sign, r1, r2, r4, r8);
+criterion_main!(keygen_sign, r0, r1, r2, r4, r8);
