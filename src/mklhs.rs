@@ -50,7 +50,7 @@ pub fn sign<const K: usize>(
 pub fn eval<const K: usize>(
     _pp: &Params<K>,
     program: &LabeledProgram<K>,
-    sign_shares: Vec<SignShare<K>>,
+    sign_shares: &[SignShare<K>],
 ) -> Result<SignAggr<K>, ProtocolError> {
     let coeffs = program.coeffs();
     let labels = program.labels();
@@ -247,7 +247,7 @@ mod tests {
             let program = LabeledProgram::new(vec![Scalar::from(1)], vec![label])
                 .expect("labeled program build failed");
 
-            let aggr = eval(&pp, &program, vec![share.clone()]).expect("eval failed");
+            let aggr = eval(&pp, &program, &vec![share.clone()]).expect("eval failed");
 
             // gamma should match share.gamma (since coeff=1)
             assert_eq!(aggr.gamma(), share.gamma());
@@ -278,7 +278,7 @@ mod tests {
             let coeffs = vec![Scalar::from(2), Scalar::from(3), Scalar::from(5)];
 
             let program = LabeledProgram::new(coeffs.clone(), labels).unwrap();
-            let aggr = eval(&pp, &program, shares.clone()).unwrap();
+            let aggr = eval(&pp, &program, &shares).unwrap();
 
             // mu should equal weighted sum of messages
             let expected_mu: Scalar = coeffs.iter().zip(msgs.iter()).map(|(f, m)| *f * *m).sum();
@@ -313,7 +313,7 @@ mod tests {
 
             let coeffs = vec![Scalar::from(1), Scalar::from(1)];
             let program = LabeledProgram::new(coeffs, vec![lab_a, lab_b]).unwrap();
-            let aggr = eval(&pp, &program, vec![sh_a.clone(), sh_b.clone()]).unwrap();
+            let aggr = eval(&pp, &program, &vec![sh_a.clone(), sh_b.clone()]).unwrap();
 
             // gamma should be the sum of gammas (coeff=1)
             assert_eq!(*aggr.gamma(), *sh_a.gamma() + *sh_b.gamma());
@@ -351,7 +351,7 @@ mod tests {
 
             let coeffs = vec![Scalar::from(2), Scalar::from(3), Scalar::from(4)];
             let program = LabeledProgram::new(coeffs.clone(), vec![lab1, lab2, lab3]).unwrap();
-            let aggr = eval(&pp, &program, vec![sh1.clone(), sh2.clone(), sh3.clone()]).unwrap();
+            let aggr = eval(&pp, &program, &vec![sh1.clone(), sh2.clone(), sh3.clone()]).unwrap();
 
             // mu_A = 2*m1 + 4*m3
             let expected_mu_a = Scalar::from(2) * m1 + Scalar::from(4) * m3;
@@ -388,7 +388,7 @@ mod tests {
 
             let coeffs = vec![Scalar::from(7), Scalar::zero()];
             let program = LabeledProgram::new(coeffs, vec![lab1, lab2]).unwrap();
-            let aggr = eval(&pp, &program, vec![sh1.clone(), sh2]).unwrap();
+            let aggr = eval(&pp, &program, &vec![sh1.clone(), sh2]).unwrap();
 
             // mu should only reflect m1
             assert_eq!(aggr.mus()[0], Scalar::from(7) * m1);
@@ -415,7 +415,7 @@ mod tests {
 
             // 1 coeff, 1 label, but 2 shares
             let program = LabeledProgram::new(vec![Scalar::from(1)], vec![lab]).unwrap();
-            assert!(eval(&pp, &program, vec![sh.clone(), sh]).is_err());
+            assert!(eval(&pp, &program, &vec![sh.clone(), sh]).is_err());
         }
     }
 
@@ -442,7 +442,7 @@ mod tests {
             let program = LabeledProgram::new(vec![Scalar::from(1)], vec![label])
                 .expect("program build failed");
 
-            let aggr = eval(&pp, &program, vec![share]).expect("eval failed");
+            let aggr = eval(&pp, &program, &vec![share]).expect("eval failed");
 
             let mut pks = HashMap::new();
             pks.insert(pk.id(), pk);
@@ -469,7 +469,7 @@ mod tests {
 
             let program = LabeledProgram::new(vec![Scalar::from(1)], vec![label]).unwrap();
 
-            let aggr = eval(&pp, &program, vec![share]).unwrap();
+            let aggr = eval(&pp, &program, &vec![share]).unwrap();
 
             let mut pks = HashMap::new();
             pks.insert(pk.id(), pk);
@@ -494,7 +494,7 @@ mod tests {
 
             let program = LabeledProgram::new(vec![Scalar::from(1)], vec![label]).unwrap();
 
-            let aggr = eval(&pp, &program, vec![share]).unwrap();
+            let aggr = eval(&pp, &program, &vec![share]).unwrap();
 
             let pks = HashMap::new(); // empty!
 
@@ -517,7 +517,7 @@ mod tests {
 
             let program = LabeledProgram::new(vec![Scalar::from(1)], vec![label]).unwrap();
 
-            let mut aggr = eval(&pp, &program, vec![share]).unwrap();
+            let mut aggr = eval(&pp, &program, &vec![share]).unwrap();
 
             // tamper gamma
             *aggr.gamma_mut() += g1_gen();
@@ -545,7 +545,7 @@ mod tests {
 
             let program = LabeledProgram::new(vec![Scalar::from(1)], vec![label]).unwrap();
 
-            let mut aggr = eval(&pp, &program, vec![share]).unwrap();
+            let mut aggr = eval(&pp, &program, &vec![share]).unwrap();
 
             // tamper mu
             aggr.mus_mut()[0] += Scalar::from(1);
@@ -579,7 +579,7 @@ mod tests {
             let coeffs = vec![Scalar::from(1), Scalar::from(1)];
             let program = LabeledProgram::new(coeffs, vec![lab_a, lab_b]).unwrap();
 
-            let aggr = eval(&pp, &program, vec![sh_a, sh_b]).unwrap();
+            let aggr = eval(&pp, &program, &vec![sh_a, sh_b]).unwrap();
 
             let mut pks = HashMap::new();
             pks.insert(pk_a.id(), pk_a);

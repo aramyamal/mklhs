@@ -98,7 +98,7 @@ fn main() {
 
     // evaluation
     println!("Evaluating...");
-    let sig = eval(&pp, &program, shares).unwrap();
+    let sig = eval(&pp, &program, &shares).unwrap();
 
     // expected: ||x - y||^2 in both integers and field
     let dist_sq_int: u64 = x

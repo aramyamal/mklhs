@@ -47,7 +47,7 @@ pub fn sign<const K: usize>(
 pub fn eval<const K: usize, const R: usize>(
     _pp: &Params<K>,
     program: &QuadProgramMsq<K, R>,
-    sign_shares: Vec<SignShareMsq<K>>,
+    sign_shares: &[SignShareMsq<K>],
 ) -> Result<QuadEvalSig1Msq<K, R>, ProtocolError> {
     let n = program.n();
     if sign_shares.len() != n {

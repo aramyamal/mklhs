@@ -90,7 +90,7 @@ fn main() {
 
     // evaluation
     println!("Evaluating...");
-    let sig = eval(&pp, &program, shares).unwrap();
+    let sig = eval(&pp, &program, &shares).unwrap();
 
     // expected values
     println!("Calculating expected values and comparing...");

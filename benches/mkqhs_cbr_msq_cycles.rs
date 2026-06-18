@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 
 use ark_std::{UniformRand, test_rng};
-use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use criterion_cycles_per_byte::CyclesPerByte;
 
 use mkqhs::{
@@ -89,14 +89,10 @@ macro_rules! bench_for_r {
                     QuadProgramMsq::<K, $r>::new(a_coeffs, b_coeffs, u_mat, v_mat, labels).unwrap();
 
                 group.bench_with_input(BenchmarkId::new("eval", format!("t={t}")), &t, |b, _| {
-                    b.iter_batched(
-                        || shares_base.clone(),
-                        |s| eval(&pp, &program, s).unwrap(),
-                        BatchSize::SmallInput,
-                    )
+                    b.iter(|| eval(&pp, &program, &shares_base).unwrap())
                 });
 
-                let sig = eval(&pp, &program, shares_base.clone()).unwrap();
+                let sig = eval(&pp, &program, &shares_base).unwrap();
                 group.bench_with_input(BenchmarkId::new("verify", format!("t={t}")), &t, |b, _| {
                     b.iter(|| verify(&pp, &program, &pks, expected, &sig).unwrap())
                 });

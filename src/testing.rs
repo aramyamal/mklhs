@@ -45,7 +45,7 @@ impl<const K: usize, const R: usize> MsqScheme<K, R> for Qhs1Msq {
         program: &QuadProgramMsq<K, R>,
         shares: Vec<SignShareMsq<K>>,
     ) -> Result<Self::Sig, ProtocolError> {
-        crate::mkqhs_br_msq::eval(pp, program, shares)
+        crate::mkqhs_br_msq::eval(pp, program, &shares)
     }
 
     fn verify(
@@ -67,7 +67,7 @@ impl<const K: usize, const R: usize> MsqScheme<K, R> for Qhs2Msq {
         program: &QuadProgramMsq<K, R>,
         shares: Vec<SignShareMsq<K>>,
     ) -> Result<Self::Sig, ProtocolError> {
-        crate::mkqhs_cbr_msq::eval(pp, program, shares)
+        crate::mkqhs_cbr_msq::eval(pp, program, &shares)
     }
 
     fn verify(

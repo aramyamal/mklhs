@@ -59,7 +59,7 @@ fn make_lhs_eval_sig(pp: &Params<K>, t: usize) -> SignAggr<K> {
     }
     let coeffs: Vec<Scalar> = (0..n).map(|_| Scalar::rand(&mut rng)).collect();
     let program = LabeledProgram::new(coeffs, labels).unwrap();
-    lhs_eval(pp, &program, shares).unwrap()
+    lhs_eval(pp, &program, &shares).unwrap()
 }
 
 fn msq_fresh_sig_size(s: &SignShareMsq<K>) -> usize {
@@ -119,7 +119,7 @@ fn make_msq_eval_sig<const R: usize>(pp: &Params<K>, t: usize) -> QuadEvalSig2Ms
         .map(|_| std::array::from_fn(|_| Scalar::rand(&mut rng)))
         .collect();
     let program = QuadProgramMsq::<K, R>::new(a_coeffs, b_coeffs, u_mat, v_mat, labels).unwrap();
-    msq_eval(pp, &program, shares).unwrap()
+    msq_eval(pp, &program, &shares).unwrap()
 }
 
 fn main() {

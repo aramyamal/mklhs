@@ -20,7 +20,7 @@ use crate::{
 pub fn eval<const K: usize, const R: usize>(
     _pp: &Params<K>,
     _program: &QuadProgram<K, R>,
-    _sign_shares: Vec<SignShare<K>>,
+    _sign_shares: &[SignShare<K>],
 ) -> Result<QuadEvalSig2<K, R>, ProtocolError> {
     todo!(
         "mkqhs_cbr eval: same gamma as qhs1, then H_FS compression of per-id quadratic components"
