@@ -33,3 +33,9 @@ impl<const K: usize> Params<K> {
         &self.h2g1_label2
     }
 }
+
+impl<const K: usize> Default for Params<K> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
