@@ -18,7 +18,7 @@ use mkqhs::{
 };
 
 const K: usize = 8;
-const T_VALUES: &[usize] = &[2, 5, 10];
+const T_VALUES: &[usize] = &[1, 2, 5, 10];
 const MSGS_PER_SIGNER: usize = 16;
 
 fn sk_size(sk: &SecretKey<K>) -> usize {
@@ -130,6 +130,8 @@ fn main() {
     let msg = Scalar::rand(&mut rng);
     let lab = Label::new(sk.id(), Tag([0u8; K]));
 
+    let mut records: Vec<String> = Vec::new();
+
     println!("=== mklhs artifact sizes ===");
     println!("  SecretKey:              {:4} B", sk_size(&sk));
     println!("  PublicKey:              {:4} B", pk_size(&pk));
@@ -140,10 +142,11 @@ fn main() {
     );
     for &t in T_VALUES {
         let sig = make_lhs_eval_sig(&pp, t);
-        println!(
-            "  EvalSig (t={t:2}):         {:4} B",
-            lhs_eval_sig_size(&sig)
-        );
+        let size = lhs_eval_sig_size(&sig);
+        println!("  EvalSig (t={t:2}):         {:4} B", size);
+        records.push(format!(
+            r#"{{"scheme":"mklhs","R":null,"t":{t},"size":{size}}}"#
+        ));
     }
 
     println!();
@@ -159,11 +162,12 @@ fn main() {
         macro_rules! msq_line {
             ($r:literal) => {{
                 let sig = make_msq_eval_sig::<$r>(&pp, t);
-                println!(
-                    "  EvalSig (R={:2}, t={t:2}):   {:4} B",
-                    $r,
-                    msq_eval_sig_size(&sig)
-                );
+                let size = msq_eval_sig_size(&sig);
+                println!("  EvalSig (R={:2}, t={t:2}):   {:4} B", $r, size);
+                records.push(format!(
+                    r#"{{"scheme":"mkqhs","R":{},"t":{t},"size":{size}}}"#,
+                    $r
+                ));
             }};
         }
         msq_line!(0);
@@ -173,4 +177,9 @@ fn main() {
         msq_line!(8);
         msq_line!(16);
     }
+
+    let json = format!("[\n  {}\n]\n", records.join(",\n  "));
+    std::fs::write("target/artifact_sizes.json", json)
+        .expect("failed to write target/artifact_sizes.json");
+    println!("\nWrote target/artifact_sizes.json");
 }

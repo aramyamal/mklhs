@@ -16,7 +16,7 @@ use mkqhs::{
 };
 
 const K: usize = 8;
-const T_VALUES: &[usize] = &[2, 5, 10];
+const T_VALUES: &[usize] = &[1, 2, 5, 10];
 const MSGS_PER_SIGNER: usize = 16;
 
 fn bench_keygen(c: &mut Criterion<CyclesPerByte>) {
