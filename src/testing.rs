@@ -30,6 +30,10 @@ pub trait MsqScheme<const K: usize, const R: usize> {
         msg: Scalar,
         sig: &Self::Sig,
     ) -> Result<bool, ProtocolError>;
+
+    fn forge_gamma_ab(sig: &Self::Sig) -> Self::Sig;
+
+    fn forge_gamma_u(sig: &Self::Sig) -> Self::Sig;
 }
 
 #[doc(hidden)]
@@ -57,6 +61,32 @@ impl<const K: usize, const R: usize> MsqScheme<K, R> for Qhs1Msq {
     ) -> Result<bool, ProtocolError> {
         crate::mkqhs_br_msq::verify(pp, program, pks, msg, sig)
     }
+
+    fn forge_gamma_ab(sig: &Self::Sig) -> Self::Sig {
+        QuadEvalSig1Msq::new(
+            *sig.gamma_ab() + *sig.gamma_ab(), //replace gamma_ab with 2*gamma_ab
+            *sig.gamma_u(),
+            *sig.gamma_v(),
+            sig.mu_ab().to_vec(),
+            sig.mu_u().to_vec(),
+            sig.mu_v().to_vec(),
+        )
+        .unwrap()
+    }
+
+    fn forge_gamma_u(sig: &Self::Sig) -> Self::Sig {
+        let mut gu = *sig.gamma_u();
+        gu[0] = gu[0] + gu[0];
+        QuadEvalSig1Msq::new(
+            *sig.gamma_ab(),
+            gu, //replace gamma_u with 2*gamma_u
+            *sig.gamma_v(),
+            sig.mu_ab().to_vec(),
+            sig.mu_u().to_vec(),
+            sig.mu_v().to_vec(),
+        )
+        .unwrap()
+    }
 }
 
 impl<const K: usize, const R: usize> MsqScheme<K, R> for Qhs2Msq {
@@ -78,5 +108,33 @@ impl<const K: usize, const R: usize> MsqScheme<K, R> for Qhs2Msq {
         sig: &Self::Sig,
     ) -> Result<bool, ProtocolError> {
         crate::mkqhs_cbr_msq::verify(pp, program, pks, msg, sig)
+    }
+
+    fn forge_gamma_ab(sig: &Self::Sig) -> Self::Sig {
+        QuadEvalSig2Msq::new(
+            *sig.gamma_ab() + *sig.gamma_ab(),
+            *sig.gamma_u(),
+            *sig.gamma_v(),
+            sig.mu_ab().to_vec(),
+            sig.mu_uv().to_vec(),
+            *sig.mu_u_global(),
+            *sig.mu_v_global(),
+        )
+        .unwrap()
+    }
+
+    fn forge_gamma_u(sig: &Self::Sig) -> Self::Sig {
+        let mut gu = *sig.gamma_u();
+        gu[0] = gu[0] + gu[0];
+        QuadEvalSig2Msq::new(
+            *sig.gamma_ab(),
+            gu,
+            *sig.gamma_v(),
+            sig.mu_ab().to_vec(),
+            sig.mu_uv().to_vec(),
+            *sig.mu_u_global(),
+            *sig.mu_v_global(),
+        )
+        .unwrap()
     }
 }

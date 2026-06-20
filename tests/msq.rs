@@ -13,8 +13,6 @@ use mkqhs::{
 
 const K: usize = 8;
 
-// TODO: Add tests for forgeries that pass the sum checks but not the pairing checks
-
 fn rand_tag<R: ark_std::rand::RngCore>(rng: &mut R) -> Tag<K> {
     let mut b = [0u8; K];
     rng.try_fill_bytes(&mut b).unwrap();
@@ -114,6 +112,55 @@ fn test_quadratic_two_users<T: MsqScheme<K, 1>>() {
     assert!(T::verify(&pp, &program, &pks, m_a * m_b, &sig).unwrap());
 }
 
+// sum check passes, pairing check on gamma_ab fails
+fn test_forgery_gamma_ab<T: MsqScheme<K, 0>>() {
+    let pp = Params::<K>::new();
+    let mut rng = test_rng();
+    let (sk, pk) = keygen(&pp, &mut rng).unwrap();
+    let msg = Scalar::rand(&mut rng);
+    let lab = Label::new(sk.id(), rand_tag(&mut rng));
+    let share = sign(&pp, &sk, lab, msg).unwrap();
+    let program = QuadProgramMsq::<K, 0>::new(
+        vec![Scalar::from(1u64)],
+        vec![Scalar::zero()],
+        vec![[]],
+        vec![[]],
+        vec![lab],
+    )
+    .unwrap();
+    let sig = T::eval(&pp, &program, vec![share]).unwrap();
+    let mut pks = HashMap::new();
+    pks.insert(pk.id(), pk);
+    assert!(!T::verify(&pp, &program, &pks, msg, &T::forge_gamma_ab(&sig)).unwrap());
+}
+
+// sum checks pass, pairing check on gamma_u fails
+fn test_forgery_gamma_u<T: MsqScheme<K, 1>>() {
+    let pp = Params::<K>::new();
+    let mut rng = test_rng();
+    let (sk_a, pk_a) = keygen(&pp, &mut rng).unwrap();
+    let (sk_b, pk_b) = keygen(&pp, &mut rng).unwrap();
+    let m_a = Scalar::rand(&mut rng);
+    let m_b = Scalar::rand(&mut rng);
+    let lab_a = Label::new(sk_a.id(), rand_tag(&mut rng));
+    let lab_b = Label::new(sk_b.id(), rand_tag(&mut rng));
+    let sh_a = sign(&pp, &sk_a, lab_a, m_a).unwrap();
+    let sh_b = sign(&pp, &sk_b, lab_b, m_b).unwrap();
+    let program = QuadProgramMsq::<K, 1>::new(
+        vec![Scalar::zero(), Scalar::zero()],
+        vec![Scalar::zero(), Scalar::zero()],
+        vec![[Scalar::from(1u64)], [Scalar::zero()]],
+        vec![[Scalar::zero()], [Scalar::from(1u64)]],
+        vec![lab_a, lab_b],
+    )
+    .unwrap();
+    let sig = T::eval(&pp, &program, vec![sh_a, sh_b]).unwrap();
+    let mut pks = HashMap::new();
+    pks.insert(pk_a.id(), pk_a);
+    pks.insert(pk_b.id(), pk_b);
+    assert!(!T::verify(&pp, &program, &pks, m_a * m_b, &T::forge_gamma_u(&sig)).unwrap());
+}
+
 fn test_wrong_msg_rejected<T: MsqScheme<K, 0>>() {
     let pp = Params::<K>::new();
     let mut rng = test_rng();
@@ -176,7 +223,7 @@ fn test_rank2_dot_product<T: MsqScheme<K, 2>>() {
     assert!(T::verify(&pp, &program, &pks, m0 * m2 + m1 * m3, &sig).unwrap());
 }
 
-// $f(\mathbf{m}) = m_0 + m_1^2 + m_2 \cdot m_3$ — linear, square, and cross-product combined
+// $f(\mathbf{m}) = m_0 + m_1^2 + m_2 \cdot m_3$
 fn test_mixed_r1<T: MsqScheme<K, 1>>() {
     let pp = Params::<K>::new();
     let mut rng = test_rng();
@@ -216,8 +263,8 @@ fn test_mixed_r1<T: MsqScheme<K, 1>>() {
     assert!(T::verify(&pp, &program, &pks, m0 + m1.square() + m2 * m3, &sig).unwrap());
 }
 
-// Variance: $f = \sum_i m_i^2 - \tfrac{1}{n}\bigl(\sum_i m_i\bigr)^2$
-// via $b_i = 1$, $u_i = 1$, $v_i = -\tfrac{1}{n}$ for all $i$.
+// Variance: $f = \sum_i m_i^2 - \frac{1}{n}\bigl(\sum_i m_i\bigr)^2$
+// via $b_i = 1$, $u_i = 1$, $v_i = -\frac{1}{n}$ for all $i$.
 fn test_variance<T: MsqScheme<K, 1>>() {
     let pp = Params::<K>::new();
     let mut rng = test_rng();
@@ -255,7 +302,6 @@ fn test_variance<T: MsqScheme<K, 1>>() {
 }
 
 // $f(\mathbf{m}) = \sum_{r=0}^{7} \bigl(\sum_i u_{i,r} m_i\bigr)\bigl(\sum_j v_{j,r} m_j\bigr)$
-// with dense random $u, v \in \mathbb{F}^{4 \times 8}$ — genuinely rank-8 bilinear form
 fn test_rank8_dense<T: MsqScheme<K, 8>>() {
     const N: usize = 4;
     let pp = Params::<K>::new();
@@ -321,6 +367,14 @@ macro_rules! scheme_tests {
             #[test]
             fn quadratic_two_users() {
                 super::test_quadratic_two_users::<$scheme>();
+            }
+            #[test]
+            fn forgery_gamma_ab_rejected() {
+                super::test_forgery_gamma_ab::<$scheme>();
+            }
+            #[test]
+            fn forgery_gamma_u_rejected() {
+                super::test_forgery_gamma_u::<$scheme>();
             }
             #[test]
             fn wrong_msg_rejected() {
