@@ -66,10 +66,11 @@ fn main() {
 
     for (i, &yi) in y_vals.iter().enumerate() {
         let sk = &sks[i % N_SIGNERS];
+        let pk = pks.get(&sk.id()).unwrap();
         let mut tag_bytes = [0u8; K];
         tag_bytes.copy_from_slice(&(i as u64).to_le_bytes());
         let lab = Label::new(sk.id(), Tag(tag_bytes));
-        let share = sign(&pp, sk, lab, Scalar::from(yi)).unwrap();
+        let share = sign(&pp, &pk, sk, lab, Scalar::from(yi)).unwrap();
         shares.push(share);
         labels.push(lab);
     }

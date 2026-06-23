@@ -54,10 +54,11 @@ fn main() {
     let mut labels = Vec::with_capacity(n);
     for (i, &mi) in msgs_scalar.iter().enumerate() {
         let sk = &sks[i % N_SIGNERS];
+        let pk = pks.get(&sk.id()).unwrap();
         let mut tag_bytes = [0u8; K];
         tag_bytes.copy_from_slice(&(i as u64).to_le_bytes());
         let lab = Label::new(sk.id(), Tag(tag_bytes));
-        let share = sign(&pp, sk, lab, mi).unwrap();
+        let share = sign(&pp, &pk, sk, lab, mi).unwrap();
         shares.push(share);
         labels.push(lab);
     }

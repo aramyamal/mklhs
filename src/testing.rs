@@ -10,12 +10,23 @@ use crate::{
     algebra::Scalar,
     errors::ProtocolError,
     params::Params,
-    types::{Id, PublicKey, QuadEvalSig1Msq, QuadEvalSig2Msq, QuadProgramMsq, SignShareMsq},
+    types::{
+        Id, Label, PublicKey, QuadEvalSig1Msq, QuadEvalSig2Msq, QuadProgramMsq, SecretKey,
+        SignShareMsq,
+    },
 };
 
 #[doc(hidden)]
 pub trait MsqScheme<const K: usize, const R: usize> {
     type Sig;
+
+    fn sign(
+        pp: &Params<K>,
+        sk: &SecretKey<K>,
+        pk: &PublicKey<K>,
+        label: Label<K>,
+        msg: Scalar,
+    ) -> Result<SignShareMsq<K>, ProtocolError>;
 
     fn eval(
         pp: &Params<K>,
@@ -43,6 +54,16 @@ pub struct Qhs2Msq;
 
 impl<const K: usize, const R: usize> MsqScheme<K, R> for Qhs1Msq {
     type Sig = QuadEvalSig1Msq<K, R>;
+
+    fn sign(
+        pp: &Params<K>,
+        sk: &SecretKey<K>,
+        _pk: &PublicKey<K>,
+        label: Label<K>,
+        msg: Scalar,
+    ) -> Result<SignShareMsq<K>, ProtocolError> {
+        crate::mkqhs_br_msq::sign(pp, sk, label, msg)
+    }
 
     fn eval(
         pp: &Params<K>,
@@ -91,6 +112,16 @@ impl<const K: usize, const R: usize> MsqScheme<K, R> for Qhs1Msq {
 
 impl<const K: usize, const R: usize> MsqScheme<K, R> for Qhs2Msq {
     type Sig = QuadEvalSig2Msq<K, R>;
+
+    fn sign(
+        pp: &Params<K>,
+        sk: &SecretKey<K>,
+        pk: &PublicKey<K>,
+        label: Label<K>,
+        msg: Scalar,
+    ) -> Result<SignShareMsq<K>, ProtocolError> {
+        crate::mkqhs_cbr_msq::sign(pp, pk, sk, label, msg)
+    }
 
     fn eval(
         pp: &Params<K>,

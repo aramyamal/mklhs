@@ -5,7 +5,7 @@ use ark_std::{UniformRand, test_rng};
 
 use mkqhs::{
     api::Scalar,
-    mkqhs_br_msq::{keygen, sign},
+    mkqhs_br_msq::keygen,
     params::Params,
     testing::{MsqScheme, Qhs1Msq, Qhs2Msq},
     types::{Label, QuadProgramMsq, Tag},
@@ -25,7 +25,7 @@ fn test_linear<T: MsqScheme<K, 0>>() {
     let (sk, pk) = keygen(&pp, &mut rng).unwrap();
     let msg = Scalar::rand(&mut rng);
     let lab = Label::new(sk.id(), rand_tag(&mut rng));
-    let share = sign(&pp, &sk, lab, msg).unwrap();
+    let share = T::sign(&pp, &sk, &pk, lab, msg).unwrap();
     let program = QuadProgramMsq::<K, 0>::new(
         vec![Scalar::from(1u64)],
         vec![Scalar::zero()],
@@ -46,7 +46,7 @@ fn test_square<T: MsqScheme<K, 0>>() {
     let (sk, pk) = keygen(&pp, &mut rng).unwrap();
     let msg = Scalar::rand(&mut rng);
     let lab = Label::new(sk.id(), rand_tag(&mut rng));
-    let share = sign(&pp, &sk, lab, msg).unwrap();
+    let share = T::sign(&pp, &sk, &pk, lab, msg).unwrap();
     let program = QuadProgramMsq::<K, 0>::new(
         vec![Scalar::zero()],
         vec![Scalar::from(1u64)],
@@ -69,8 +69,8 @@ fn test_sum_of_squares<T: MsqScheme<K, 0>>() {
     let m2 = Scalar::rand(&mut rng);
     let lab1 = Label::new(sk.id(), rand_tag(&mut rng));
     let lab2 = Label::new(sk.id(), rand_tag(&mut rng));
-    let sh1 = sign(&pp, &sk, lab1, m1).unwrap();
-    let sh2 = sign(&pp, &sk, lab2, m2).unwrap();
+    let sh1 = T::sign(&pp, &sk, &pk, lab1, m1).unwrap();
+    let sh2 = T::sign(&pp, &sk, &pk, lab2, m2).unwrap();
     let program = QuadProgramMsq::<K, 0>::new(
         vec![Scalar::zero(), Scalar::zero()],
         vec![Scalar::from(1u64), Scalar::from(1u64)],
@@ -95,8 +95,8 @@ fn test_quadratic_two_users<T: MsqScheme<K, 1>>() {
     let m_b = Scalar::rand(&mut rng);
     let lab_a = Label::new(sk_a.id(), rand_tag(&mut rng));
     let lab_b = Label::new(sk_b.id(), rand_tag(&mut rng));
-    let sh_a = sign(&pp, &sk_a, lab_a, m_a).unwrap();
-    let sh_b = sign(&pp, &sk_b, lab_b, m_b).unwrap();
+    let sh_a = T::sign(&pp, &sk_a, &pk_a, lab_a, m_a).unwrap();
+    let sh_b = T::sign(&pp, &sk_b, &pk_b, lab_b, m_b).unwrap();
     let program = QuadProgramMsq::<K, 1>::new(
         vec![Scalar::zero(), Scalar::zero()],
         vec![Scalar::zero(), Scalar::zero()],
@@ -119,7 +119,7 @@ fn test_forgery_gamma_ab<T: MsqScheme<K, 0>>() {
     let (sk, pk) = keygen(&pp, &mut rng).unwrap();
     let msg = Scalar::rand(&mut rng);
     let lab = Label::new(sk.id(), rand_tag(&mut rng));
-    let share = sign(&pp, &sk, lab, msg).unwrap();
+    let share = T::sign(&pp, &sk, &pk, lab, msg).unwrap();
     let program = QuadProgramMsq::<K, 0>::new(
         vec![Scalar::from(1u64)],
         vec![Scalar::zero()],
@@ -144,8 +144,8 @@ fn test_forgery_gamma_u<T: MsqScheme<K, 1>>() {
     let m_b = Scalar::rand(&mut rng);
     let lab_a = Label::new(sk_a.id(), rand_tag(&mut rng));
     let lab_b = Label::new(sk_b.id(), rand_tag(&mut rng));
-    let sh_a = sign(&pp, &sk_a, lab_a, m_a).unwrap();
-    let sh_b = sign(&pp, &sk_b, lab_b, m_b).unwrap();
+    let sh_a = T::sign(&pp, &sk_a, &pk_a, lab_a, m_a).unwrap();
+    let sh_b = T::sign(&pp, &sk_b, &pk_b, lab_b, m_b).unwrap();
     let program = QuadProgramMsq::<K, 1>::new(
         vec![Scalar::zero(), Scalar::zero()],
         vec![Scalar::zero(), Scalar::zero()],
@@ -167,7 +167,7 @@ fn test_wrong_msg_rejected<T: MsqScheme<K, 0>>() {
     let (sk, pk) = keygen(&pp, &mut rng).unwrap();
     let msg = Scalar::rand(&mut rng);
     let lab = Label::new(sk.id(), rand_tag(&mut rng));
-    let share = sign(&pp, &sk, lab, msg).unwrap();
+    let share = T::sign(&pp, &sk, &pk, lab, msg).unwrap();
     let program = QuadProgramMsq::<K, 0>::new(
         vec![Scalar::from(1u64)],
         vec![Scalar::zero()],
@@ -199,10 +199,10 @@ fn test_rank2_dot_product<T: MsqScheme<K, 2>>() {
     let lab1 = Label::new(sk1.id(), rand_tag(&mut rng));
     let lab2 = Label::new(sk2.id(), rand_tag(&mut rng));
     let lab3 = Label::new(sk3.id(), rand_tag(&mut rng));
-    let sh0 = sign(&pp, &sk0, lab0, m0).unwrap();
-    let sh1 = sign(&pp, &sk1, lab1, m1).unwrap();
-    let sh2 = sign(&pp, &sk2, lab2, m2).unwrap();
-    let sh3 = sign(&pp, &sk3, lab3, m3).unwrap();
+    let sh0 = T::sign(&pp, &sk0, &pk0, lab0, m0).unwrap();
+    let sh1 = T::sign(&pp, &sk1, &pk1, lab1, m1).unwrap();
+    let sh2 = T::sign(&pp, &sk2, &pk2, lab2, m2).unwrap();
+    let sh3 = T::sign(&pp, &sk3, &pk3, lab3, m3).unwrap();
     // r=0: left = m_0, right = m_2; r=1: left = m_1, right = m_3
     let one = Scalar::from(1u64);
     let zero = Scalar::zero();
@@ -239,10 +239,10 @@ fn test_mixed_r1<T: MsqScheme<K, 1>>() {
     let lab1 = Label::new(sk1.id(), rand_tag(&mut rng));
     let lab2 = Label::new(sk2.id(), rand_tag(&mut rng));
     let lab3 = Label::new(sk3.id(), rand_tag(&mut rng));
-    let sh0 = sign(&pp, &sk0, lab0, m0).unwrap();
-    let sh1 = sign(&pp, &sk1, lab1, m1).unwrap();
-    let sh2 = sign(&pp, &sk2, lab2, m2).unwrap();
-    let sh3 = sign(&pp, &sk3, lab3, m3).unwrap();
+    let sh0 = T::sign(&pp, &sk0, &pk0, lab0, m0).unwrap();
+    let sh1 = T::sign(&pp, &sk1, &pk1, lab1, m1).unwrap();
+    let sh2 = T::sign(&pp, &sk2, &pk2, lab2, m2).unwrap();
+    let sh3 = T::sign(&pp, &sk3, &pk3, lab3, m3).unwrap();
     let one = Scalar::from(1u64);
     let zero = Scalar::zero();
     // a=[1,0,0,0], b=[0,1,0,0], u[2][0]=1, v[3][0]=1
@@ -277,9 +277,9 @@ fn test_variance<T: MsqScheme<K, 1>>() {
     let lab0 = Label::new(sk0.id(), rand_tag(&mut rng));
     let lab1 = Label::new(sk1.id(), rand_tag(&mut rng));
     let lab2 = Label::new(sk2.id(), rand_tag(&mut rng));
-    let sh0 = sign(&pp, &sk0, lab0, m0).unwrap();
-    let sh1 = sign(&pp, &sk1, lab1, m1).unwrap();
-    let sh2 = sign(&pp, &sk2, lab2, m2).unwrap();
+    let sh0 = T::sign(&pp, &sk0, &pk0, lab0, m0).unwrap();
+    let sh1 = T::sign(&pp, &sk1, &pk1, lab1, m1).unwrap();
+    let sh2 = T::sign(&pp, &sk2, &pk2, lab2, m2).unwrap();
     let one = Scalar::from(1u64);
     let zero = Scalar::zero();
     let n_inv = Scalar::from(3u64).inverse().unwrap();
@@ -325,7 +325,7 @@ fn test_rank8_dense<T: MsqScheme<K, 8>>() {
         .iter()
         .zip(labs.iter())
         .zip(msgs.iter())
-        .map(|((sk, &lab), &msg)| sign(&pp, sk, lab, msg).unwrap())
+        .map(|((sk, &lab), &msg)| T::sign(&pp, sk, &sk.get_pk(), lab, msg).unwrap())
         .collect();
 
     let u: [[Scalar; 8]; N] =

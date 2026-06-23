@@ -15,15 +15,36 @@ use ark_serialize::CanonicalSerialize;
 use sha2::{Digest, Sha256};
 
 pub use crate::mklhs::keygen;
-pub use crate::mkqhs_br_msq::sign;
 
 use crate::{
     algebra::{G1, GT, Scalar, g1_gen, g2_gen, hash_to_g1_with, pairing, scalar_is_zero},
     api::scalar_zero,
     errors::ProtocolError,
     params::Params,
-    types::{Id, PublicKey, QuadEvalSig2Msq, QuadProgramMsq, SignShareMsq, organize},
+    types::{
+        Id, Label, PublicKey, QuadEvalSig2Msq, QuadProgramMsq, SecretKey, SignShareMsq, organize,
+    },
 };
+
+pub fn sign<const K: usize>(
+    pp: &Params<K>,
+    pk: &PublicKey<K>,
+    sk: &SecretKey<K>,
+    label: Label<K>,
+    msg: Scalar,
+) -> Result<SignShareMsq<K>, ProtocolError> {
+    let label_bytes = label.to_bytes();
+    let mut pk_bytes = Vec::new();
+    pk.value().serialize_uncompressed(&mut pk_bytes).unwrap();
+    let hash_input = [pk_bytes.as_slice(), label_bytes.as_slice()].concat();
+    let h1 = hash_to_g1_with(pp.h2g1_label(), &hash_input)?;
+    let h2 = hash_to_g1_with(pp.h2g1_label2(), &hash_input)?;
+
+    let gamma = (h1 + g1_gen() * msg) * (*sk.value());
+    let gamma_sq = (h2 + g1_gen() * msg.square()) * (*sk.value());
+
+    Ok(SignShareMsq::new(sk.id(), gamma, gamma_sq, msg))
+}
 
 /// Hash H_FS. Serialises all public inputs to bytes and derives
 /// 2R scalars via SHA-256.

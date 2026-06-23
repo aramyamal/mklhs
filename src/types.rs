@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    algebra::{G1, G2, Scalar},
+    algebra::{G1, G2, Scalar, g2_gen},
     errors::ProtocolError,
 };
 
@@ -83,6 +83,10 @@ impl<const K: usize> SecretKey<K> {
 
     pub fn into_parts(self) -> (Id<K>, Scalar) {
         (self.id, self.value)
+    }
+
+    pub fn get_pk(&self) -> PublicKey<K> {
+        PublicKey::new(self.id(), g2_gen() * self.value())
     }
 }
 

@@ -95,8 +95,10 @@ fn make_msq_eval_sig<const R: usize>(pp: &Params<K>, t: usize) -> QuadEvalSig2Ms
     let mut rng = test_rng();
     let n = t * MSGS_PER_SIGNER;
     let mut sks = Vec::new();
+    let mut pks = Vec::new();
     for _ in 0..t {
-        let (sk, _pk) = keygen(pp, &mut rng).unwrap();
+        let (sk, pk) = keygen(pp, &mut rng).unwrap();
+        pks.push(pk);
         sks.push(sk);
     }
     let msgs: Vec<Scalar> = (0..n).map(|_| Scalar::rand(&mut rng)).collect();
@@ -107,7 +109,7 @@ fn make_msq_eval_sig<const R: usize>(pp: &Params<K>, t: usize) -> QuadEvalSig2Ms
             let idx = i * MSGS_PER_SIGNER + j;
             let lab = Label::new(sks[i].id(), Tag((idx as u64).to_le_bytes()));
             labels.push(lab);
-            shares.push(msq_sign(pp, &sks[i], lab, msgs[idx]).unwrap());
+            shares.push(msq_sign(pp, &pks[i], &sks[i], lab, msgs[idx]).unwrap());
         }
     }
     let a_coeffs: Vec<Scalar> = (0..n).map(|_| Scalar::rand(&mut rng)).collect();
@@ -153,7 +155,7 @@ fn main() {
     println!("=== mkqhs_cbr_msq artifact sizes ===");
     println!("  SecretKey:              {:4} B", sk_size(&sk));
     println!("  PublicKey:              {:4} B", pk_size(&pk));
-    let share = msq_sign(&pp, &sk, lab, msg).unwrap();
+    let share = msq_sign(&pp, &pk, &sk, lab, msg).unwrap();
     println!(
         "  FreshSig:               {:4} B",
         msq_fresh_sig_size(&share)
