@@ -9,6 +9,7 @@ use crate::{
 
 use ark_bls12_381::Bls12_381;
 use ark_ec::{CurveGroup, VariableBaseMSM, pairing::Pairing};
+use ark_serialize::CanonicalSerialize;
 use ark_std::{UniformRand, rand::RngCore};
 
 pub fn keygen<const K: usize, R: RngCore>(
@@ -35,12 +36,16 @@ pub fn keygen<const K: usize, R: RngCore>(
 
 pub fn sign<const K: usize>(
     pp: &Params<K>,
+    pk: &PublicKey<K>,
     sk: &SecretKey<K>,
     label: Label<K>,
     msg: Scalar,
 ) -> Result<SignShare<K>, ProtocolError> {
     let label_bytes = label.to_bytes();
-    let h = hash_to_g1_with(pp.h2g1_label(), &label_bytes)?;
+    let mut pk_bytes = Vec::new();
+    pk.value().serialize_uncompressed(&mut pk_bytes).unwrap();
+    let hash_input = [pk_bytes.as_slice(), label_bytes.as_slice()].concat();
+    let h = hash_to_g1_with(pp.h2g1_label(), &hash_input)?;
 
     let gamma = (h + g1_gen() * msg) * (*sk.value());
 
@@ -106,6 +111,17 @@ pub fn verify<const K: usize>(
 
     // per-group MSM: collect bases and scalars for each signer group
     let n_groups = ord_ids.len();
+    let pk_bytes_by_j: Vec<Vec<u8>> = ord_ids
+        .iter()
+        .map(|id| {
+            let pk = pks.get(id).ok_or_else(|| {
+                ProtocolError::InvalidInput("missing public key for ord_id".to_string())
+            })?;
+            let mut bytes = Vec::new();
+            pk.value().serialize_uncompressed(&mut bytes).unwrap();
+            Ok(bytes)
+        })
+        .collect::<Result<_, ProtocolError>>()?;
     let mut msm_bases: Vec<Vec<_>> = vec![Vec::new(); n_groups];
     let mut msm_scalars: Vec<Vec<Scalar>> = vec![Vec::new(); n_groups];
     for (i, lab) in program.labels().iter().enumerate() {
@@ -116,7 +132,8 @@ pub fn verify<const K: usize>(
         if scalar_is_zero(&f_i) {
             continue;
         }
-        let h_i = hash_to_g1_with(pp.h2g1_label(), &lab.to_bytes())?;
+        let hash_input = [pk_bytes_by_j[j].as_slice(), &lab.to_bytes()].concat();
+        let h_i = hash_to_g1_with(pp.h2g1_label(), &hash_input)?;
         msm_bases[j].push(h_i.into_affine());
         msm_scalars[j].push(f_i);
     }
@@ -127,13 +144,10 @@ pub fn verify<const K: usize>(
     }
 
     // collect G1/G2 affine points then call multi_pairing
-    let mut g2_pts = Vec::with_capacity(n_groups);
-    for id_j in ord_ids.iter() {
-        let pk = pks.get(id_j).ok_or_else(|| {
-            ProtocolError::InvalidInput("missing public key for ord_id".to_string())
-        })?;
-        g2_pts.push(pk.value().into_affine());
-    }
+    let g2_pts: Vec<_> = ord_ids
+        .iter()
+        .map(|id| pks.get(id).unwrap().value().into_affine())
+        .collect();
     let g1_pts: Vec<_> = a.iter().map(|p| p.into_affine()).collect();
     let c: GT = Bls12_381::multi_pairing(g1_pts, g2_pts).0;
 
@@ -235,13 +249,13 @@ mod tests {
             let mut rng = test_rng();
 
             // one user, one message, coeff=1 => eval should reproduce the same mu
-            let (sk, _pk) = keygen(&pp, &mut rng).expect("keygen failed");
+            let (sk, pk) = keygen(&pp, &mut rng).expect("keygen failed");
 
             let tag = rand_tag::<K, _>(&mut rng);
             let label = Label::new(sk.id(), tag);
             let msg = Scalar::rand(&mut rng);
 
-            let share = sign(&pp, &sk, label, msg).expect("sign failed");
+            let share = sign(&pp, &pk, &sk, label, msg).expect("sign failed");
 
             // labeled program with n=1, f1=1
             let program = LabeledProgram::new(vec![Scalar::from(1)], vec![label])
@@ -263,7 +277,7 @@ mod tests {
             let pp = Params::<K>::new();
             let mut rng = test_rng();
 
-            let (sk, _pk) = keygen(&pp, &mut rng).unwrap();
+            let (sk, pk) = keygen(&pp, &mut rng).unwrap();
 
             let msgs: Vec<Scalar> = (0..3).map(|_| Scalar::rand(&mut rng)).collect();
             let tags: Vec<Tag<K>> = (0..3).map(|_| rand_tag::<K, _>(&mut rng)).collect();
@@ -272,7 +286,7 @@ mod tests {
             let shares: Vec<SignShare<K>> = labels
                 .iter()
                 .zip(msgs.iter())
-                .map(|(l, m)| sign(&pp, &sk, *l, *m).unwrap())
+                .map(|(l, m)| sign(&pp, &pk, &sk, *l, *m).unwrap())
                 .collect();
 
             let coeffs = vec![Scalar::from(2), Scalar::from(3), Scalar::from(5)];
@@ -299,8 +313,8 @@ mod tests {
             let pp = Params::<K>::new();
             let mut rng = test_rng();
 
-            let (sk_a, _pk_a) = keygen(&pp, &mut rng).unwrap();
-            let (sk_b, _pk_b) = keygen(&pp, &mut rng).unwrap();
+            let (sk_a, pk_a) = keygen(&pp, &mut rng).unwrap();
+            let (sk_b, pk_b) = keygen(&pp, &mut rng).unwrap();
 
             let msg_a = Scalar::rand(&mut rng);
             let msg_b = Scalar::rand(&mut rng);
@@ -308,8 +322,8 @@ mod tests {
             let lab_a = Label::new(sk_a.id(), rand_tag::<K, _>(&mut rng));
             let lab_b = Label::new(sk_b.id(), rand_tag::<K, _>(&mut rng));
 
-            let sh_a = sign(&pp, &sk_a, lab_a, msg_a).unwrap();
-            let sh_b = sign(&pp, &sk_b, lab_b, msg_b).unwrap();
+            let sh_a = sign(&pp, &pk_a, &sk_a, lab_a, msg_a).unwrap();
+            let sh_b = sign(&pp, &pk_b, &sk_b, lab_b, msg_b).unwrap();
 
             let coeffs = vec![Scalar::from(1), Scalar::from(1)];
             let program = LabeledProgram::new(coeffs, vec![lab_a, lab_b]).unwrap();
@@ -334,8 +348,8 @@ mod tests {
             let pp = Params::<K>::new();
             let mut rng = test_rng();
 
-            let (sk_a, _) = keygen(&pp, &mut rng).unwrap();
-            let (sk_b, _) = keygen(&pp, &mut rng).unwrap();
+            let (sk_a, pk_a) = keygen(&pp, &mut rng).unwrap();
+            let (sk_b, pk_b) = keygen(&pp, &mut rng).unwrap();
 
             let m1 = Scalar::rand(&mut rng);
             let m2 = Scalar::rand(&mut rng);
@@ -345,9 +359,9 @@ mod tests {
             let lab2 = Label::new(sk_b.id(), rand_tag::<K, _>(&mut rng));
             let lab3 = Label::new(sk_a.id(), rand_tag::<K, _>(&mut rng));
 
-            let sh1 = sign(&pp, &sk_a, lab1, m1).unwrap();
-            let sh2 = sign(&pp, &sk_b, lab2, m2).unwrap();
-            let sh3 = sign(&pp, &sk_a, lab3, m3).unwrap();
+            let sh1 = sign(&pp, &pk_a, &sk_a, lab1, m1).unwrap();
+            let sh2 = sign(&pp, &pk_b, &sk_b, lab2, m2).unwrap();
+            let sh3 = sign(&pp, &pk_a, &sk_a, lab3, m3).unwrap();
 
             let coeffs = vec![Scalar::from(2), Scalar::from(3), Scalar::from(4)];
             let program = LabeledProgram::new(coeffs.clone(), vec![lab1, lab2, lab3]).unwrap();
@@ -375,7 +389,7 @@ mod tests {
             let pp = Params::<K>::new();
             let mut rng = test_rng();
 
-            let (sk, _) = keygen(&pp, &mut rng).unwrap();
+            let (sk, pk) = keygen(&pp, &mut rng).unwrap();
 
             let m1 = Scalar::rand(&mut rng);
             let m2 = Scalar::rand(&mut rng);
@@ -383,8 +397,8 @@ mod tests {
             let lab1 = Label::new(sk.id(), rand_tag::<K, _>(&mut rng));
             let lab2 = Label::new(sk.id(), rand_tag::<K, _>(&mut rng));
 
-            let sh1 = sign(&pp, &sk, lab1, m1).unwrap();
-            let sh2 = sign(&pp, &sk, lab2, m2).unwrap();
+            let sh1 = sign(&pp, &pk, &sk, lab1, m1).unwrap();
+            let sh2 = sign(&pp, &pk, &sk, lab2, m2).unwrap();
 
             let coeffs = vec![Scalar::from(7), Scalar::zero()];
             let program = LabeledProgram::new(coeffs, vec![lab1, lab2]).unwrap();
@@ -403,10 +417,10 @@ mod tests {
             let pp = Params::<K>::new();
             let mut rng = test_rng();
 
-            let (sk, _) = keygen(&pp, &mut rng).unwrap();
+            let (sk, pk) = keygen(&pp, &mut rng).unwrap();
 
             let lab = Label::new(sk.id(), rand_tag::<K, _>(&mut rng));
-            let sh = sign(&pp, &sk, lab, Scalar::from(42)).unwrap();
+            let sh = sign(&pp, &pk, &sk, lab, Scalar::from(42)).unwrap();
 
             // 2 coeffs but 1 label
             assert!(
@@ -436,7 +450,7 @@ mod tests {
             let msg = Scalar::rand(&mut rng);
             let label = Label::new(sk.id(), rand_tag::<K, _>(&mut rng));
 
-            let share = sign(&pp, &sk, label, msg).expect("sign failed");
+            let share = sign(&pp, &pk, &sk, label, msg).expect("sign failed");
 
             // trivial linear program: f = 1
             let program = LabeledProgram::new(vec![Scalar::from(1)], vec![label])
@@ -465,7 +479,7 @@ mod tests {
             let wrong_msg = Scalar::rand(&mut rng);
 
             let label = Label::new(sk.id(), rand_tag::<K, _>(&mut rng));
-            let share = sign(&pp, &sk, label, msg).unwrap();
+            let share = sign(&pp, &pk, &sk, label, msg).unwrap();
 
             let program = LabeledProgram::new(vec![Scalar::from(1)], vec![label]).unwrap();
 
@@ -485,12 +499,12 @@ mod tests {
             let pp = Params::<K>::new();
             let mut rng = test_rng();
 
-            let (sk, _pk) = keygen(&pp, &mut rng).unwrap();
+            let (sk, pk) = keygen(&pp, &mut rng).unwrap();
 
             let msg = Scalar::rand(&mut rng);
             let label = Label::new(sk.id(), rand_tag::<K, _>(&mut rng));
 
-            let share = sign(&pp, &sk, label, msg).unwrap();
+            let share = sign(&pp, &pk, &sk, label, msg).unwrap();
 
             let program = LabeledProgram::new(vec![Scalar::from(1)], vec![label]).unwrap();
 
@@ -513,7 +527,7 @@ mod tests {
             let msg = Scalar::rand(&mut rng);
             let label = Label::new(sk.id(), rand_tag::<K, _>(&mut rng));
 
-            let share = sign(&pp, &sk, label, msg).unwrap();
+            let share = sign(&pp, &pk, &sk, label, msg).unwrap();
 
             let program = LabeledProgram::new(vec![Scalar::from(1)], vec![label]).unwrap();
 
@@ -541,7 +555,7 @@ mod tests {
             let msg = Scalar::rand(&mut rng);
             let label = Label::new(sk.id(), rand_tag::<K, _>(&mut rng));
 
-            let share = sign(&pp, &sk, label, msg).unwrap();
+            let share = sign(&pp, &pk, &sk, label, msg).unwrap();
 
             let program = LabeledProgram::new(vec![Scalar::from(1)], vec![label]).unwrap();
 
@@ -573,8 +587,8 @@ mod tests {
             let lab_a = Label::new(sk_a.id(), rand_tag::<K, _>(&mut rng));
             let lab_b = Label::new(sk_b.id(), rand_tag::<K, _>(&mut rng));
 
-            let sh_a = sign(&pp, &sk_a, lab_a, msg_a).unwrap();
-            let sh_b = sign(&pp, &sk_b, lab_b, msg_b).unwrap();
+            let sh_a = sign(&pp, &pk_a, &sk_a, lab_a, msg_a).unwrap();
+            let sh_b = sign(&pp, &pk_b, &sk_b, lab_b, msg_b).unwrap();
 
             let coeffs = vec![Scalar::from(1), Scalar::from(1)];
             let program = LabeledProgram::new(coeffs, vec![lab_a, lab_b]).unwrap();

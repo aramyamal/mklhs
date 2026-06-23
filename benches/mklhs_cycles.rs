@@ -30,11 +30,11 @@ fn bench_keygen(c: &mut Criterion<CyclesPerByte>) {
 fn bench_sign(c: &mut Criterion<CyclesPerByte>) {
     let pp = Params::<K>::new();
     let mut rng = test_rng();
-    let (sk, _) = keygen(&pp, &mut rng).unwrap();
+    let (sk, pk) = keygen(&pp, &mut rng).unwrap();
     let msg = Scalar::rand(&mut rng);
     let lab = Label::new(sk.id(), Tag([0u8; K]));
     c.bench_function("mklhs/sign", |b| {
-        b.iter(|| sign(&pp, &sk, lab, msg).unwrap())
+        b.iter(|| sign(&pp, &pk, &sk, lab, msg).unwrap())
     });
 }
 
@@ -62,7 +62,7 @@ fn bench_eval_verify(c: &mut Criterion<CyclesPerByte>) {
                 let idx = i * MSGS_PER_SIGNER + j;
                 let lab = Label::new(sks[i].id(), Tag((idx as u64).to_le_bytes()));
                 labels.push(lab);
-                shares_base.push(sign(&pp, &sks[i], lab, msgs[idx]).unwrap());
+                shares_base.push(sign(&pp, pks.get(&sks[i].id()).unwrap(), &sks[i], lab, msgs[idx]).unwrap());
             }
         }
         let coeffs: Vec<Scalar> = (0..n).map(|_| Scalar::rand(&mut rng)).collect();

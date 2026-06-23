@@ -42,9 +42,11 @@ fn make_lhs_eval_sig(pp: &Params<K>, t: usize) -> SignAggr<K> {
     let mut rng = test_rng();
     let n = t * MSGS_PER_SIGNER;
     let mut sks = Vec::new();
+    let mut pks = Vec::new();
     for _ in 0..t {
-        let (sk, _pk) = keygen(pp, &mut rng).unwrap();
+        let (sk, pk) = keygen(pp, &mut rng).unwrap();
         sks.push(sk);
+        pks.push(pk);
     }
     let msgs: Vec<Scalar> = (0..n).map(|_| Scalar::rand(&mut rng)).collect();
     let mut labels = Vec::new();
@@ -54,7 +56,7 @@ fn make_lhs_eval_sig(pp: &Params<K>, t: usize) -> SignAggr<K> {
             let idx = i * MSGS_PER_SIGNER + j;
             let lab = Label::new(sks[i].id(), Tag((idx as u64).to_le_bytes()));
             labels.push(lab);
-            shares.push(lhs_sign(pp, &sks[i], lab, msgs[idx]).unwrap());
+            shares.push(lhs_sign(pp, &pks[i], &sks[i], lab, msgs[idx]).unwrap());
         }
     }
     let coeffs: Vec<Scalar> = (0..n).map(|_| Scalar::rand(&mut rng)).collect();
@@ -137,7 +139,7 @@ fn main() {
     println!("=== mklhs artifact sizes ===");
     println!("  SecretKey:              {:4} B", sk_size(&sk));
     println!("  PublicKey:              {:4} B", pk_size(&pk));
-    let share = lhs_sign(&pp, &sk, lab, msg).unwrap();
+    let share = lhs_sign(&pp, &pk, &sk, lab, msg).unwrap();
     println!(
         "  FreshSig:               {:4} B",
         lhs_fresh_sig_size(&share)
