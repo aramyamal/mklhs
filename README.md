@@ -37,37 +37,20 @@ Succinctness requires $R$ to grow at most logarithmically in the number of messa
 
 Linear functions, as supported by the baseline `mklhs` scheme:
 
-$$
-f(m_1,\ldots,m_n)=
-\sum_{i=1}^n a_i m_i.
-$$
+$f(m_1,\ldots,m_n)=\sum_{i=1}^n a_i m_i.$
 
 ### Function Class (1)
 
 Bounded-rank quadratics, where the quadratic part is a sum of $R$ products of linear polynomials (and hence has _rank_ $R$):
 
-$$
-f(m_1,\ldots,m_n)=
-\sum_{i=1}^n a_i m_i
-+
-\sum_{r=1}^{R}
-\Bigl(\sum_{i=1}^n u_{i,r}\,m_i\Bigr)
-\Bigl(\sum_{i=1}^n v_{i,r}\,m_i\Bigr).
-$$
+$f(m_1,\ldots,m_n)=\sum_{i=1}^n a_i m_i+\sum_{r=1}^{R}\Bigl(\sum_{i=1}^n u_{i,r}\,m_i\Bigr)\Bigl(\sum_{i=1}^n v_{i,r}\,m_i\Bigr).$
 
 ### Function Class (2)
 
 Message-squares extensions, which additionally admits direct
 square terms $b_i m_i^2$ by having each signer also sign $m_i^2$:
 
-$$
-f(m_1,\ldots,m_n)=
-\sum_{i=1}^n\bigl(a_i m_i + b_i m_i^2\bigr)
-+
-\sum_{r=1}^{R}
-\Bigl(\sum_{i=1}^n u_{i,r}\,m_i\Bigr)
-\Bigl(\sum_{i=1}^n v_{i,r}\,m_i\Bigr).
-$$
+$f(m_1,\ldots,m_n)=\sum_{i=1}^n\bigl(a_i m_i + b_i m_i^2\bigr)+\sum_{r=1}^{R}\Bigl(\sum_{i=1}^n u_{i,r}\,m_i\Bigr)\Bigl(\sum_{i=1}^n v_{i,r}\,m_i\Bigr).$
 
 ## Examples
 
