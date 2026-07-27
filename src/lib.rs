@@ -1,4 +1,4 @@
-//! research implementation of MKHS schemes from ...
+//! Research implementation of multi-key homomorphic signature (MKHS) schemes.
 //! Research artefact. Not audited. Do not use in production.
 
 #![forbid(unsafe_code)]

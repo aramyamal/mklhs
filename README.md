@@ -18,20 +18,17 @@ message-squares. It builds on the baseline $\textsf{mklhs}$ scheme of Aranha and
 ## Schemes
 
 The paper presents two schemes: $\textsf{mklhs}$ as the baseline and $\textsf{mkqhs}$ as the
-main contribution. The intermediate constructions (`mkqhs_br`, `mkqhs_cbr`, `mkqhs_br_msq`) are
-stepping stones not named in the paper.
+main contribution.
 
 | Module          | Scheme                                                                           | Function class | Eval. sig. size | Status      |
 | --------------- | -------------------------------------------------------------------------------- | -------------- | --------------- | ----------- |
 | `mklhs`         | $\textsf{mklhs}$: Multi-key linearly homomorphic signatures (Aranha–Pagnin 2019) | (0)            | $O(t)$          | implemented |
-| `mkqhs_br`      | Bounded-rank quadratic, baseline (intermediate)                                  | (1)            | $O(tR)$         | skeleton    |
-| `mkqhs_cbr`     | Bounded-rank quadratic, compressed (intermediate)                                | (1)            | $O(t+R)$        | skeleton    |
-| `mkqhs_br_msq`  | Bounded-rank quadratic with message-squares, baseline (intermediate)             | (2)            | $O(tR)$         | implemented |
-| `mkqhs_cbr_msq` | $\textsf{mkqhs}$: Bounded-rank quadratic with message-squares, compressed        | (2)            | $O(t+R)$        | implemented |
+| `mkqhs_cbr_msq` | $\textsf{mkqhs}$: Bounded-rank quadratic with message-squares, compressed        | (1)            | $O(t+r)$        | implemented |
 
-$\textsf{mkqhs}$ is secure under the co-CDH\* assumption in the Type-3 pairing setting. The
-evaluated signature size is reported in the number of signers $t$ and the bounded rank $R$.
-Succinctness requires $R$ to grow at most logarithmically in the number of message inputs.
+The
+evaluated signature size is reported in the number of signers $t$ and the cross-term rank $r$.
+Succinctness requires $r$ to grow at most logarithmically in the number of message inputs.
+$\textsf{mkqhs}$ is secure under the co-CDH\* assumption in the Type-3 pairing setting. 
 
 ### Function Class (0)
 
@@ -41,16 +38,10 @@ $f(m_1,\ldots,m_n)=\sum_{i=1}^n a_i m_i.$
 
 ### Function Class (1)
 
-Bounded-rank quadratics, where the quadratic part is a sum of $R$ products of linear polynomials (and hence has _rank_ $R$):
+Admits direct
+square terms $b_i m_i^2$ by having each signer also sign $m_i^2$, alongside a cross-term part which is a sum of $r$ products of linear polynomials (and hence has _cross-term rank_ $r$):
 
-$f(m_1,\ldots,m_n)=\sum_{i=1}^n a_i m_i+\sum_{r=1}^{R}\Bigl(\sum_{i=1}^n u_{i,r}\,m_i\Bigr)\Bigl(\sum_{i=1}^n v_{i,r}\,m_i\Bigr).$
-
-### Function Class (2)
-
-Message-squares extensions, which additionally admits direct
-square terms $b_i m_i^2$ by having each signer also sign $m_i^2$:
-
-$f(m_1,\ldots,m_n)=\sum_{i=1}^n\bigl(a_i m_i + b_i m_i^2\bigr)+\sum_{r=1}^{R}\Bigl(\sum_{i=1}^n u_{i,r}\,m_i\Bigr)\Bigl(\sum_{i=1}^n v_{i,r}\,m_i\Bigr).$
+$f(m_1,\ldots,m_n)=\sum_{i=1}^n\bigl(a_i m_i + b_i m_i^2\bigr)+\sum_{j=1}^{r}\Bigl(\sum_{i=1}^n u_{i,j}\,m_i\Bigr)\Bigl(\sum_{i=1}^n v_{i,j}\,m_i\Bigr).$
 
 ## Examples
 
@@ -82,8 +73,8 @@ cargo bench --bench <name>
 
 | Bench                  | Scheme           | Measures                                                                                                                                               |
 | ---------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `mklhs_cycles`         | $\textsf{mklhs}$ | CPU cycles for `keygen`, `sign`, `eval`, `verify` over $t \in$ {2, 5, 10} signers, each user signing 16 messages.                                      |
-| `mkqhs_cbr_msq_cycles` | $\textsf{mkqhs}$ | CPU cycles for `keygen`, `sign`, `eval`, `verify` over $t \in$ {2, 5, 10} signers, each user signing 16 messages, swept over ranks $R \in$ {0,1,2,4,8} |
+| `mklhs_cycles`         | $\textsf{mklhs}$ | CPU cycles for `keygen`, `sign`, `eval`, `verify` over $t \in$ {1, 2, 5, 10} signers, each user signing 16 messages.                                      |
+| `mkqhs_cbr_msq_cycles` | $\textsf{mkqhs}$ | CPU cycles for `keygen`, `sign`, `eval`, `verify` over $t \in$ {1, 2, 5, 10} signers, each user signing 16 messages, swept over ranks $r \in$ {0,1,2,4,8} |
 | `artifact_sizes`       | both             | Compressed byte sizes of keys, fresh signatures, and eval signatures                                                                                   |
 
 Criterion writes HTML reports to `target/criterion/`.
@@ -94,8 +85,8 @@ The `analysis/` directory contains Jupyter notebooks for post-processing benchma
 
 | File                  | Description                                                                                              |
 | --------------------- | -------------------------------------------------------------------------------------------------------- |
-| `cycles.ipynb`        | Fits linear models to cycle-count data and plots $\textsf{mklhs}$ vs $\textsf{mkqhs}$ across $t$ and $R$ |
-| `artifact_size.ipynb` | Fits a linear model to evaluated signature sizes and plots size as a function of $t$ and $R$             |
+| `cycles.ipynb`        | Fits linear models to cycle-count data and plots $\textsf{mklhs}$ vs $\textsf{mkqhs}$ across $t$ and $r$ |
+| `artifact_size.ipynb` | Fits a linear model to evaluated signature sizes and plots size as a function of $t$ and $r$             |
 
 Generated plots are written to `analysis/plots/`.
 

@@ -1,7 +1,4 @@
 //! mkqhs-br: baseline bounded-rank quadratic homomorphic signature scheme.
-//!
-//! Eval and Verify as in Figure 5.2 of the thesis.
-//! Setup, KeyGen, and Sign are from mklhs as in Figure 5.1 of the thesis.
 
 pub use crate::mklhs::keygen;
 

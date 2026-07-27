@@ -1,10 +1,7 @@
 //! mkqhs-cbr: compressed bounded-rank quadratic homomorphic signature scheme.
 //!
-//! Eval and Verify as in Figure 6.1 of the thesis.
 //! Reduces evaluated signature size from O(tR) to O(t + R) by compressing per-identity
 //! quadratic components.
-//!
-//! Setup, KeyGen, and Sign are from mklhs (Figure 5.1) (see `mklhs::keygen` and `mklhs::sign`).
 
 pub use crate::mklhs::keygen;
 

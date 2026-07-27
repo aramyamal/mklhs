@@ -1,10 +1,4 @@
 //! mkqhs-cbr-msq: message-squares variant of mkqhs-cbr.
-//!
-//! An extension of mkqhs-br obtained by the compression of mkqhs-cbr and message-squares extension
-//! of mkqhs-br-msq.
-//!
-//! Compared to mkqhs-br-msq, per-id quadratic components are compressed using
-//! a hash H_FS, reducing evaluated signature size from O(tR) to O(t + R).
 
 use std::collections::HashMap;
 

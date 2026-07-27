@@ -1,3 +1,5 @@
+//! mklhs: baseline linear multi-key homomorphic signature scheme.
+
 use std::collections::HashMap;
 
 use crate::{
